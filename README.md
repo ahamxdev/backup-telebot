@@ -28,7 +28,8 @@ backup-telebot/
 ├── .env                  # Environment variables and bot configuration
 ├── requirements.txt      # Required Python packages
 ├── venv/                 # Python virtual environment for dependencies
-├── main.py               # Main bot script
+├── bot.py                # Main
+ bot script
 └── README.md             # Project documentation
 ```
 
@@ -91,7 +92,7 @@ Create and fill in the `.env` file as described above.
 ### 5. Run the Bot
 
 ```bash
-python main.py
+python bot.py
 ```
 
 ### 6. Run as a Service (Optional)
