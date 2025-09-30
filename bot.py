@@ -61,17 +61,28 @@ def send_existing_files():
 
 
 def monitor_directory():
-    """Monitor directory for new files"""
+    """Monitor directory for new backup files and send them along with logs"""
     already_seen = set(os.listdir(WATCH_DIR))
+
+    LOG_FILES = ["backup.log", "backup_fartak.log"]
 
     while True:
         time.sleep(60)
         current_files = set(os.listdir(WATCH_DIR))
         new_files = current_files - already_seen
+
         for file in new_files:
             path = os.path.join(WATCH_DIR, file)
-            if os.path.isfile(path):
+            if os.path.isfile(path) and file.endswith(".bak"):
+                # Send the new backup file
                 send_file(path)
+                
+                # Send log files along with the backup
+                for log_file in LOG_FILES:
+                    log_path = os.path.join(WATCH_DIR, log_file)
+                    if os.path.exists(log_path):
+                        send_file(log_path)
+
         already_seen = current_files
 
 
