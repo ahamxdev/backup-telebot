@@ -14,7 +14,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # Directory and log files
-WATCH_DIR = os.getenv("WATCH_DIR")
+WATCH_DIR = os.getenv("REMOTE_BACKUP_DIR")
 LOG_FILES = [f.strip() for f in os.getenv("LOG_FILES", "").split(",") if f.strip()]
 
 # Track sent files
