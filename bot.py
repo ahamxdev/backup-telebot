@@ -10,6 +10,9 @@ import os
 import time
 import telebot
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()  # Loads variables from .env
 
 # ================= CONFIG =================
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
