@@ -1,81 +1,78 @@
 #!/usr/bin/env python3
-# bot.py
+"""
+Telegram Backup Bot
+- Monitors a directory for backup files
+- Sends new or existing files to a Telegram chat
+- Logs all actions in bot.log
+"""
 
 import os
 import time
-import requests
-from dotenv import load_dotenv
+import telebot
+import logging
 
-# Load environment variables from .env
-load_dotenv()
-
-# Telegram bot settings
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# ================= CONFIG =================
+API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+WATCH_DIR = os.getenv("REMOTE_BACKUP_DIR", "/root/apps/fartak_backups")
+# ==========================================
 
-# Directory and log files
-WATCH_DIR = os.getenv("REMOTE_BACKUP_DIR")
-LOG_FILES = [f.strip() for f in os.getenv("LOG_FILES", "").split(",") if f.strip()]
+bot = telebot.TeleBot(API_TOKEN)
 
-# Track sent files
-sent_files = set()
+# ---------- Logging Setup ----------
+log_file = os.path.join(os.path.dirname(__file__), "bot.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(log_file, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("backup-telebot")
 
 
 def send_file(file_path):
-    """Send a single file to the Telegram channel via Bot API."""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
-    with open(file_path, "rb") as f:
-        resp = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-    if resp.status_code == 200:
-        print(f"Sent: {file_path}")
-    else:
-        print(f"Failed to send {file_path}: {resp.text}")
+    """Send a file to the configured Telegram chat"""
+    try:
+        with open(file_path, "rb") as f:
+            bot.send_document(CHAT_ID, f)
+        logger.info(f"Sent: {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to send {file_path}: {e}")
 
 
 def send_existing_files():
-    """Send all files in the directory + log files on first run."""
-    all_files = [f for f in os.listdir(WATCH_DIR) if f.endswith(".bak")]
+    """Send all existing files in the watch directory"""
+    if not WATCH_DIR:
+        logger.error("WATCH_DIR is not set.")
+        return
+    if not os.path.exists(WATCH_DIR):
+        logger.error(f"Directory not found: {WATCH_DIR}")
+        return
 
-    for f in all_files:
-        path = os.path.join(WATCH_DIR, f)
-        send_file(path)
-        sent_files.add(f)
-
-    for log in LOG_FILES:
+    for log in os.listdir(WATCH_DIR):
         path = os.path.join(WATCH_DIR, log)
-        if os.path.exists(path):
+        if os.path.isfile(path):
             send_file(path)
 
 
 def monitor_directory():
-    """Monitor the directory every 60s, send new backups with logs."""
-    global sent_files
+    """Monitor directory for new files"""
+    already_seen = set(os.listdir(WATCH_DIR))
+
     while True:
-        try:
-            # Find new .bak files
-            all_files = [f for f in os.listdir(WATCH_DIR) if f.endswith(".bak")]
-            new_files = [f for f in all_files if f not in sent_files]
-
-            for f in new_files:
-                path = os.path.join(WATCH_DIR, f)
-                send_file(path)
-
-                # Send logs with the new backup
-                for log in LOG_FILES:
-                    log_path = os.path.join(WATCH_DIR, log)
-                    if os.path.exists(log_path):
-                        send_file(log_path)
-
-                sent_files.add(f)
-
-        except Exception as e:
-            print(f"Error: {e}")
-
         time.sleep(60)
+        current_files = set(os.listdir(WATCH_DIR))
+        new_files = current_files - already_seen
+        for file in new_files:
+            path = os.path.join(WATCH_DIR, file)
+            if os.path.isfile(path):
+                send_file(path)
+        already_seen = current_files
 
 
 def main():
-    """Run bot: send all files first, then start monitoring."""
     send_existing_files()
     monitor_directory()
 
