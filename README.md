@@ -124,7 +124,7 @@ For questions or support, you can reach out via [GitHub Issues](https://github.c
 
 ## 👤 Author
 
-**Name:** ahamxdev  
+**Name:** AmirHossein AliMohammadi
 **GitHub:** [github.com/ahamxdev](https://github.com/ahamxdev)
 
 Good luck! 🚀
