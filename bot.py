@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """
-Telegram Backup Bot
-- Monitors a directory for backup files
-- Sends new or existing files to a Telegram chat
-- Logs all actions in bot.log
+Telegram Backup Bot (Scheduled)
+- Sends all existing files at startup
+- Then checks daily at 01:00 UTC for new backup files
 """
 
 import os
 import time
 import telebot
 import logging
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-load_dotenv()  # Loads variables from .env
+# =============== CONFIG ===============
+load_dotenv()
 
-# ================= CONFIG =================
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WATCH_DIR = os.getenv("REMOTE_BACKUP_DIR", "/root/apps/fartak_backups")
-# ==========================================
+
+CHECK_HOUR_UTC = 1      # 01:00 UTC
+CHECK_MINUTE_UTC = 0
+LOG_FILES = ["backup.log", "backup_fartak.log"]
+# ======================================
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -34,61 +38,65 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backup-telebot")
 
+sent_files = set()
+
 
 def send_file(file_path):
-    """Send a file to the configured Telegram chat"""
+    """Send a file to the configured Telegram chat."""
     try:
         with open(file_path, "rb") as f:
             bot.send_document(CHAT_ID, f)
-        logger.info(f"Sent: {file_path}")
+        logger.info(f"✅ Sent: {file_path}")
     except Exception as e:
-        logger.error(f"Failed to send {file_path}: {e}")
+        logger.error(f"❌ Failed to send {file_path}: {e}")
 
 
-def send_existing_files():
-    """Send all existing files in the watch directory"""
-    if not WATCH_DIR:
-        logger.error("WATCH_DIR is not set.")
-        return
+def process_backups():
+    """Check directory for new backups and send them."""
+    global sent_files
+
+    logger.info("🔍 Checking for new backup files...")
+
     if not os.path.exists(WATCH_DIR):
         logger.error(f"Directory not found: {WATCH_DIR}")
         return
 
-    for log in os.listdir(WATCH_DIR):
-        path = os.path.join(WATCH_DIR, log)
-        if os.path.isfile(path):
-            send_file(path)
+    all_files = [f for f in os.listdir(WATCH_DIR) if f.endswith(".bak")]
+    new_files = [f for f in all_files if f not in sent_files]
 
+    if not new_files:
+        logger.info("No new backups found.")
+        return
 
-def monitor_directory():
-    """Monitor directory for new backup files and send them along with logs"""
-    already_seen = set(os.listdir(WATCH_DIR))
+    for f in new_files:
+        file_path = os.path.join(WATCH_DIR, f)
+        if os.path.isfile(file_path):
+            send_file(file_path)
 
-    LOG_FILES = ["backup.log", "backup_fartak.log"]
+            # Send log files with the backup
+            for log_file in LOG_FILES:
+                log_path = os.path.join(WATCH_DIR, log_file)
+                if os.path.exists(log_path):
+                    send_file(log_path)
 
-    while True:
-        time.sleep(60)
-        current_files = set(os.listdir(WATCH_DIR))
-        new_files = current_files - already_seen
-
-        for file in new_files:
-            path = os.path.join(WATCH_DIR, file)
-            if os.path.isfile(path) and file.endswith(".bak"):
-                # Send the new backup file
-                send_file(path)
-                
-                # Send log files along with the backup
-                for log_file in LOG_FILES:
-                    log_path = os.path.join(WATCH_DIR, log_file)
-                    if os.path.exists(log_path):
-                        send_file(log_path)
-
-        already_seen = current_files
+            sent_files.add(f)
 
 
 def main():
-    send_existing_files()
-    monitor_directory()
+    """Main logic: send existing backups, then run daily at 01:00 UTC."""
+    logger.info("🚀 Initial run: sending all existing backups...")
+    process_backups()
+
+    logger.info(f"⏰ Scheduled to check daily at {CHECK_HOUR_UTC:02d}:{CHECK_MINUTE_UTC:02d} UTC...")
+
+    while True:
+        now_utc = datetime.now(timezone.utc)
+        if now_utc.hour == CHECK_HOUR_UTC and now_utc.minute == CHECK_MINUTE_UTC:
+            process_backups()
+            logger.info("⏳ Waiting until next day...")
+            time.sleep(3600 * 23.5)  # Wait ~23.5 hours to avoid re-triggering same day
+        else:
+            time.sleep(60)
 
 
 if __name__ == "__main__":
