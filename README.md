@@ -1,130 +1,202 @@
-# Backup TeleBot
+# Telegram Backup Sender Bot
 
-A simple and practical Telegram bot for automatically sending new backup files to admins via a Telegram channel.  
-This project is ideal for managing and notifying about the latest server or database backups.
+A production-grade Linux background service that watches a directory, detects new backup files,
+uploads them to one or more Telegram chats, and deletes each file only after confirmed delivery.
 
----
-
-## 🚀 Project Overview
-
-**Backup TeleBot** automatically checks the backup directory every 1 minute (configurable).  
-If a new backup file is added, it sends that file to a specified Telegram channel or chat, keeping admins instantly updated about the latest backups.
-
-### Features
-
-- Automatically sends new backup files to a Telegram channel or chat
-- Periodic checks (default: every 1 minute) for new files
-- Flexible configuration via `.env` file
-- Easy and fast setup using `venv` and `requirements.txt`
-- Suitable for servers and critical services
-- Customizable log file tracking
+**One-way only** — the bot never reads incoming messages or responds to commands.
 
 ---
 
-## 🗂 Project Structure
+## Features
 
-```
-backup-telebot/
-├── .env                  # Environment variables and bot configuration
-├── requirements.txt      # Required Python packages
-├── venv/                 # Python virtual environment for dependencies
-├── bot.py                # Main
- bot script
-└── README.md             # Project documentation
-```
+- **Crash-safe state machine**: every upload is tracked via atomic rename + fsync'd progress files so a sudden power-cut or OOM-kill is safely recoverable on the next start.
+- **Multi-chat**: send each backup to any number of Telegram chats/channels in one sweep.
+- **SOCKS proxy**: all Telegram traffic can be tunnelled through a SOCKS5 proxy with DNS-over-proxy (`socks5h://`).
+- **Stability guard**: waits until a file stops changing before uploading (configurable via `STABLE_SECONDS`).
+- **Rate-limit aware**: sleeps the exact duration Telegram requests on a 429 response.
+- **Single-instance lock**: `fcntl.flock` prevents two bot processes from racing over the same files.
 
 ---
 
-## ⚙️ Environment Variables
+## Requirements
 
-Set the following variables in your `.env` file:
-
-| Variable             | Description                                                     |
-|----------------------|-----------------------------------------------------------------|
-| REMOTE_BACKUP_DIR    | Path to the directory containing backup files                   |
-| TELEGRAM_BOT_TOKEN   | Telegram bot token (get from BotFather)                         |
-| TELEGRAM_CHAT_ID     | Telegram channel or chat ID (e.g., -1001234567890 or @channel)  |
-| LOG_FILES            | Comma-separated list of log file names to track (optional)      |
-
-Sample `.env` file:
-```env
-REMOTE_BACKUP_DIR=/path/to/backup
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-TELEGRAM_CHAT_ID=your_telegram_channel_ID
-LOG_FILES=files_for_logging
-```
-
-**Notes:**
-- `TELEGRAM_CHAT_ID` can be a channel ID (format: -100xxxxxxxxxx) or a username (format: @yourchannel).
-- If you want to track multiple log files, separate their names with commas in `LOG_FILES`.
+- Python 3.10+
+- Linux (uses `fcntl`)
 
 ---
 
-## 🛠 Installation & Setup
-
-### 1. Clone the Repository
+## Installation
 
 ```bash
-git clone https://github.com/ahamxdev/backup-telebot.git
-cd backup-telebot
+# 1. Create a dedicated user and directories
+sudo useradd -r -s /bin/false backupbot
+sudo mkdir -p /opt/backup-telegram
+sudo chown backupbot:backupbot /opt/backup-telegram
+
+# 2. Clone the repository
+cd /opt/backup-telegram
+sudo -u backupbot git clone https://github.com/ahamxdev/backup-telebot .
+
+# 3. Create a virtual environment and install
+sudo -u backupbot python3 -m venv venv
+sudo -u backupbot venv/bin/pip install --upgrade pip
+sudo -u backupbot venv/bin/pip install .
 ```
 
-### 2. Create a Python Virtual Environment
+---
 
-Recommended for isolating project dependencies:
+## Getting a Bot Token
+
+1. Open Telegram and start a chat with **@BotFather**.
+2. Send `/newbot` and follow the prompts.
+3. Copy the token (format: `123456789:AAxxxxxxxxxxxxxxxx`).
+4. Paste it into your `.env` as `TELEGRAM_BOT_TOKEN`.
+
+---
+
+## Discovering Chat IDs
+
+The bot needs the numeric chat ID of every target (group, channel, or private chat).
+
+**Step 1** — Add the bot to the target chat and send any message to it (or `/start` in a private chat).
+
+**Step 2** — Run the helper script:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # On Linux/Mac
-venv\Scripts\activate      # On Windows
+TELEGRAM_BOT_TOKEN=<your_token> python scripts/get_chat_id.py
 ```
 
-### 3. Install Dependencies
+Or with a SOCKS proxy:
 
 ```bash
-pip install -r requirements.txt
+TELEGRAM_BOT_TOKEN=<token> SOCKS_PROXY=socks5h://127.0.0.1:1080 \
+    python scripts/get_chat_id.py --duration 60
 ```
 
-### 4. Configure Environment Variables
+The script polls for 60 seconds and prints every chat it sees. Copy the IDs into `.env`.
 
-Create and fill in the `.env` file as described above.
+For **channels** the ID is negative (e.g. `-1001234567890`). The bot must be an **administrator** with "Post Messages" permission to send to a channel.
 
-### 5. Run the Bot
+---
+
+## Configuration
 
 ```bash
-python bot.py
+cd /opt/backup-telegram
+sudo -u backupbot cp .env.example .env
+sudo -u backupbot nano .env
 ```
 
-### 6. Run as a Service (Optional)
+See [.env.example](.env.example) for every variable with inline documentation.
 
-For continuous operation on a server, you can use tools like `screen`, `tmux`, or services such as `systemd`.
+Minimum required variables:
 
----
-
-## 💡 Important Notes
-
-- The bot must have permission to send messages to the target channel or chat (add the bot as a channel admin).
-- Make sure the backup directory path is correct and the bot has access to it.
-- For better security, keep sensitive info like the bot token only in the `.env` file.
-- If you wish to monitor log files, ensure their paths are correct and accessible.
+```
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_TARGET_CHAT_IDS=...
+WATCH_DIR=/backup
+```
 
 ---
 
-## 🧑‍💻 Contribution
+## Running Manually (for testing)
 
-If you have suggestions or encounter an issue, please open a new Issue or submit a Pull Request.
+```bash
+sudo -u backupbot /opt/backup-telegram/venv/bin/telegram-backup-bot --env-file /opt/backup-telegram/.env
+```
+
+Or with debug logging:
+
+```bash
+... telegram-backup-bot --env-file .env --log-level DEBUG
+```
 
 ---
 
-## 📞 Contact
+## Systemd Service
 
-For questions or support, you can reach out via [GitHub Issues](https://github.com/ahamxdev/backup-telebot/issues) or directly contact the maintainer.
+```bash
+# Install the unit file
+sudo cp systemd/telegram-backup-bot.service /etc/systemd/system/
+
+# Reload systemd and enable
+sudo systemctl daemon-reload
+sudo systemctl enable telegram-backup-bot
+sudo systemctl start telegram-backup-bot
+
+# Check status and logs
+sudo systemctl status telegram-backup-bot
+sudo journalctl -u telegram-backup-bot -f
+```
+
+The service unit expects:
+
+| Path | Purpose |
+|---|---|
+| `/opt/backup-telegram/.env` | Environment file (loaded by `EnvironmentFile=`) |
+| `/opt/backup-telegram/venv/bin/telegram-backup-bot` | Installed entry point |
+
+Adjust `ExecStart=` in the unit file if you use a different install path.
 
 ---
 
-## 👤 Author
+## How Crash Recovery Works
 
-**Name:** AmirHossein AliMohammadi
-**GitHub:** [github.com/ahamxdev](https://github.com/ahamxdev)
+Each file goes through this state machine:
 
-Good luck! 🚀
+```
+backup.tar.gz                           ← discovered in WATCH_DIR
+    │  (atomic os.rename)
+    ▼
+backup.tar.gz.uploading                 ← bot owns this file
+    │  (for each chat_id)
+    │    send_document()
+    │    append chat_id to .progress + fsync
+    ▼
+backup.tar.gz.uploading.progress        ← list of chats already sent
+    │  (all chats done)
+    │    write .sentok + fsync
+    │    delete .progress
+    ▼
+backup.tar.gz.uploading.sentok          ← all sends confirmed
+    │
+    │    delete .uploading
+    │    delete .sentok
+    ▼
+  (gone)
+```
+
+On restart after a crash:
+
+| Files found | Action |
+|---|---|
+| `.uploading` only | Resume from `.progress`; re-send missing chats |
+| `.uploading` + `.sentok` | All sends confirmed; delete both, skip re-send |
+| `.uploading` older than `DELETE_UPLOADING_OLDER_THAN_HOURS` | Delete and abandon |
+
+---
+
+## SOCKS Proxy
+
+Set `SOCKS_PROXY=socks5h://user:pass@host:port` to route **all** Telegram traffic through the proxy. The `socks5h://` scheme sends DNS queries through the proxy too.
+
+Requires `PySocks`, which is installed automatically as part of `requests[socks]`.
+
+---
+
+## Project Layout
+
+```
+src/tgbot_backup/
+├── __init__.py
+├── config.py         — configuration / .env loader
+├── telegram_api.py   — HTTP client (sendDocument, deleteWebhook, getUpdates)
+├── service.py        — stability tracker, lock, main loop, state machine
+└── cli.py            — argparse entry point
+scripts/
+└── get_chat_id.py    — standalone helper to discover chat IDs
+systemd/
+└── telegram-backup-bot.service
+pyproject.toml
+.env.example
+```

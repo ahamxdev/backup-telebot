@@ -1,0 +1,38 @@
+[Unit]
+Description=Telegram Backup Sender Bot
+Documentation=https://github.com/ahamxdev/backup-telebot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=backupbot
+Group=backupbot
+
+# Load all settings from a .env-style file (one KEY=VALUE per line)
+EnvironmentFile=/opt/backup-telegram/.env
+
+# Path to the installed entry point (adjust if installed in a virtualenv)
+ExecStart=/opt/backup-telegram/venv/bin/telegram-backup-bot
+
+# Restart unconditionally so the bot recovers from any crash
+Restart=always
+RestartSec=5
+
+# Allow graceful shutdown: SIGINT triggers the stop-flag, service has 30 s to finish
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Harden the process slightly
+NoNewPrivileges=true
+
+# Grant write access to the backup directory, the lock file location, and the install dir
+ReadWritePaths=/backup /tmp /opt/backup-telegram
+
+# Redirect stdout/stderr to the journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-backup-bot
+
+[Install]
+WantedBy=multi-user.target

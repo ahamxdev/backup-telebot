@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "tgbot-backup"
+version = "1.0.0"
+description = "One-way Telegram bot that watches a directory and uploads new backup files."
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31.0",
+    "requests[socks]",   # pulls in PySocks for SOCKS5 proxy support
+]
+
+[project.scripts]
+telegram-backup-bot = "tgbot_backup.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
