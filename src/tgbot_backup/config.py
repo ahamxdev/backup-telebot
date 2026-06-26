@@ -129,9 +129,19 @@ class Settings:
     # --- Pipeline defaults (overridable per job) ---
     default_encrypt_tool: str     # "age" or "gpg"
 
+    # --- Telegram command interface (two-way; disabled when empty) ---
+    # WARNING: enabling this turns the bot into a two-way command surface.
+    # Only whitelisted admin IDs can send commands; only predefined jobs can run.
+    telegram_admin_chat_ids: tuple[str, ...]  # empty = command interface disabled
+    command_rate_limit: int       # max commands per minute per admin chat
+
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
+
+    @property
+    def commands_enabled(self) -> bool:
+        return len(self.telegram_admin_chat_ids) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +202,22 @@ def load_settings(env_file: str | None = None) -> Settings:
         heartbeat_interval_hours=_parse_float(os.environ.get("HEARTBEAT_INTERVAL_HOURS"), 0.0),
         alert_consecutive_failures=_parse_int(os.environ.get("ALERT_CONSECUTIVE_FAILURES"), 3),
         default_encrypt_tool=os.environ.get("ENCRYPT_TOOL", "age").strip().lower(),
+        telegram_admin_chat_ids=_parse_admin_chat_ids(
+            os.environ.get("TELEGRAM_ADMIN_CHAT_IDS", "")
+        ),
+        command_rate_limit=_parse_int(os.environ.get("COMMAND_RATE_LIMIT"), 10),
     )
+
+
+def _parse_admin_chat_ids(value: str) -> tuple[str, ...]:
+    """Parse TELEGRAM_ADMIN_CHAT_IDS — empty string returns empty tuple (disables commands)."""
+    ids = _split_csv(value)
+    for cid in ids:
+        if not re.match(r"^-?\d+$", cid):
+            raise ValueError(
+                f"Invalid chat_id {cid!r} in TELEGRAM_ADMIN_CHAT_IDS (must be numeric)."
+            )
+    return ids
 
 
 def _check_env_file_permissions(path: str) -> None:

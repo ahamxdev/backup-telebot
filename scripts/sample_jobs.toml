@@ -1,7 +1,7 @@
 # =============================================================================
 # sample_jobs.toml — example backup job definitions
 #
-# Set BACKUP_JOBS_FILE=/opt/backup-telegram/jobs.toml in your .env
+# Set BACKUP_JOBS_FILE=/opt/backup-telebot/jobs.toml in your .env
 # File must be owned by root or backupbot with mode 0600:
 #   sudo chmod 600 jobs.toml
 #
@@ -72,3 +72,44 @@ schedule = "0 2 * * 0"          # every Sunday at 02:00 UTC
 output   = "/backup/uploads_{date}.tar.gz"
 enabled  = false
 timeout_seconds = 7200          # 2 hours max for large upload dirs
+
+
+# ---------------------------------------------------------------------------
+# MSSQL backup via docker exec
+# ---------------------------------------------------------------------------
+# WARNING: SQL Server backups can be very large. Make sure /backup has
+# enough free space before enabling. Use retention_keep to avoid disk fill.
+[[job]]
+name    = "mssql-bigtools"
+command = "/opt/backup-telebot/mssql-backup.sh"
+schedule = "every 15m"
+output  = "/backup/*.bak"
+dbname  = "bigtools"
+retention_keep = 3               # keep only the 3 most recent .bak files
+timeout_seconds = 600            # 10 minutes max
+manual_trigger = true            # also triggerable on demand via /run mssql-bigtools
+restore_hint = """\
+♻️ Restore:\n\
+docker cp {filename} mssql:/var/opt/mssql/backup/\n\
+docker exec mssql /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P '<password>' -C \
+  -Q "RESTORE DATABASE [{dbname}] FROM DISK = N'/var/opt/mssql/backup/{filename}' \
+WITH REPLACE, STATS = 10"\
+"""
+
+
+# ---------------------------------------------------------------------------
+# Manual-trigger-only jobs (no automatic schedule)
+# ---------------------------------------------------------------------------
+
+[[job]]
+name           = "postgres-full-dump"
+command        = "pg_dump -h db.internal -U backupuser -d maindb -F c -f /backup/manual_dump_{date}.dump"
+output         = "/backup/manual_dump_{date}.dump"
+manual_trigger = true            # only triggered via /run postgres-full-dump from Telegram
+dbname         = "maindb"
+restore_hint   = "♻️ Restore: pg_restore -h db.internal -U backupuser -d {dbname} {filename}"
+enabled        = false           # set true and add TELEGRAM_ADMIN_CHAT_IDS to use
+
+[job.env]
+PGPASSWORD = "${PGPASSWORD}"

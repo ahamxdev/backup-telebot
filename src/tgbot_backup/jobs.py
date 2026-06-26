@@ -50,7 +50,7 @@ class JobResult:
 class BackupJob:
     name: str
     command: str | list[str]
-    schedule: str
+    schedule: str           # cron expr or "every Xh"; may be empty for manual-only jobs
     output: str
     enabled: bool = True
     target_chat_ids: tuple[str, ...] | None = None
@@ -63,6 +63,13 @@ class BackupJob:
     split_size_mb: int = 45
     retention_keep: int = 0
     sudo_prefix: bool = False
+    # --- Command-interface fields ---
+    # SECURITY: only manual_trigger=true jobs can be triggered from Telegram.
+    # The command string always comes from this server-side config, never from Telegram.
+    manual_trigger: bool = False
+    # --- Caption metadata ---
+    dbname: str = ""          # database name shown in Telegram caption
+    restore_hint: str = ""    # per-job restore guide appended to caption
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +135,12 @@ def load_jobs(jobs_file: str) -> list[BackupJob]:
         jobs.append(job)
 
     enabled = [j for j in jobs if j.enabled]
-    logger.info("Loaded %d job(s) from %s (%d enabled).", len(jobs), jobs_file, len(enabled))
+    scheduled = [j for j in enabled if j.schedule]
+    manual_only = [j for j in enabled if not j.schedule and j.manual_trigger]
+    logger.info(
+        "Loaded %d job(s) from %s (%d enabled: %d scheduled, %d manual-only).",
+        len(jobs), jobs_file, len(enabled), len(scheduled), len(manual_only),
+    )
     return enabled
 
 
@@ -148,8 +160,12 @@ def _parse_job(raw: dict[str, Any]) -> BackupJob:
         command = [str(c) for c in command]
 
     schedule: str = str(raw.get("schedule", "")).strip()
-    if not schedule:
-        raise ValueError(f"Job {name!r}: 'schedule' is required.")
+    # schedule may be empty for manual_trigger-only jobs (no auto-scheduling)
+    manual_trigger_flag = bool(raw.get("manual_trigger", False))
+    if not schedule and not manual_trigger_flag:
+        raise ValueError(
+            f"Job {name!r}: 'schedule' is required unless 'manual_trigger = true'."
+        )
 
     output: str = str(raw.get("output", "")).strip()
     if not output:
@@ -196,6 +212,9 @@ def _parse_job(raw: dict[str, Any]) -> BackupJob:
         split_size_mb=int(raw.get("split_size_mb", 45)),
         retention_keep=int(raw.get("retention_keep", 0)),
         sudo_prefix=bool(raw.get("sudo_prefix", False)),
+        manual_trigger=bool(raw.get("manual_trigger", False)),
+        dbname=str(raw.get("dbname", "")),
+        restore_hint=str(raw.get("restore_hint", "")),
     )
 
 

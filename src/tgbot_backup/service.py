@@ -24,6 +24,7 @@ import socket
 import threading
 import time
 from datetime import datetime, timezone
+
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +164,7 @@ class BackupSenderService:
         self._job_threads: dict[str, threading.Thread] = {}
         self._failure_counts: dict[str, int] = {}
         self._last_heartbeat: float = 0.0
+        self._cmd_handler: Any | None = None
 
     # ------------------------------------------------------------------
     # Signal handling
@@ -191,6 +193,8 @@ class BackupSenderService:
     # Caption builders
     # ------------------------------------------------------------------
 
+    _CAPTION_LIMIT = 1024  # Telegram sendDocument caption hard limit
+
     def _build_caption(
         self,
         file_path: str,
@@ -198,22 +202,80 @@ class BackupSenderService:
         *,
         checksum: str | None = None,
         part_info: str | None = None,
-    ) -> str:
+        dbname: str = "",
+        restore_hint: str = "",
+    ) -> tuple[str, str]:
+        """Return (caption_for_file, follow_up_text).
+
+        If the full caption fits within 1024 chars, follow_up_text is empty.
+        If the restore guide pushes it over, we split: the file gets a compact
+        caption and the restore guide is returned as a separate follow-up message.
+        """
         try:
             size = os.path.getsize(file_path)
         except OSError:
             size = 0
-        caption = self._s.caption_template.format(
-            filename=original_name,
-            size_human=_size_human(size),
-            hostname=socket.gethostname(),
-            public_ip=self._get_public_ip(),
+
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        public_ip = self._get_public_ip()
+
+        # Build template variables — degrade gracefully on missing values
+        fmt_vars: dict[str, str] = {
+            "filename": original_name,
+            "size_human": _size_human(size),
+            "hostname": socket.gethostname(),
+            "public_ip": public_ip if public_ip != "unknown" else "",
+            "timestamp": now_str,
+            "dbname": dbname or "",
+            "sha256": checksum or "",
+            "restore_hint": "",  # filled in later
+        }
+
+        # Try to format the caption template; fall back to default if it references
+        # an unknown variable (backward compat with old templates)
+        try:
+            base_caption = self._s.caption_template.format(**fmt_vars)
+        except KeyError:
+            base_caption = (
+                f"📦 {original_name}\n"
+                f"📊 {_size_human(size)}\n"
+                f"🖥️ {socket.gethostname()}\n"
+                + (f"🌐 {public_ip}\n" if public_ip != "unknown" else "")
+                + f"📅 {now_str}"
+            )
+
+        # Remove blank lines from missing optional fields
+        base_caption = "\n".join(
+            line for line in base_caption.splitlines() if line.strip()
         )
-        if checksum:
-            caption += f"\nSHA-256: {checksum[:16]}..."
+
         if part_info:
-            caption += f"\n{part_info}"
-        return caption
+            base_caption += f"\n{part_info}"
+
+        # Format restore_hint (if provided) substituting {filename} and {dbname}
+        formatted_hint = ""
+        if restore_hint:
+            try:
+                formatted_hint = restore_hint.format(
+                    filename=original_name,
+                    dbname=dbname or "database",
+                )
+            except (KeyError, ValueError):
+                formatted_hint = restore_hint
+
+        full_caption = base_caption
+        if formatted_hint:
+            full_caption = base_caption + "\n\n" + formatted_hint
+
+        if len(full_caption) <= self._CAPTION_LIMIT:
+            return full_caption, ""
+
+        # Full caption exceeds limit — try without restore guide
+        if len(base_caption) <= self._CAPTION_LIMIT:
+            return base_caption, formatted_hint
+
+        # Even base is over limit (rare) — hard truncate
+        return base_caption[: self._CAPTION_LIMIT - 3] + "...", formatted_hint
 
     # ------------------------------------------------------------------
     # Progress / state-file helpers
@@ -261,15 +323,21 @@ class BackupSenderService:
         chat_ids: tuple[str, ...] | None = None,
         checksum: str | None = None,
         part_info: str | None = None,
+        dbname: str = "",
+        restore_hint: str = "",
     ) -> None:
         """Upload *uploading_path* to every chat in *chat_ids* (or the global default).
 
         Progress is persisted after each chat so a crash can be resumed.
+        If the restore guide overflows the 1024-char caption limit, it is sent
+        as a follow-up text message to each chat.
         """
         effective_chat_ids = chat_ids if chat_ids is not None else self._s.telegram_target_chat_ids
         already_sent = self._read_progress(uploading_path)
-        caption = self._build_caption(
-            uploading_path, original_name, checksum=checksum, part_info=part_info
+        caption, follow_up = self._build_caption(
+            uploading_path, original_name,
+            checksum=checksum, part_info=part_info,
+            dbname=dbname, restore_hint=restore_hint,
         )
 
         for chat_id in effective_chat_ids:
@@ -280,6 +348,11 @@ class BackupSenderService:
                 continue
             logger.info("  Sending %s → chat %s …", original_name, chat_id)
             self._send_with_retry(uploading_path, original_name, chat_id, caption)
+            if follow_up:
+                try:
+                    self._client.send_message(chat_id=chat_id, text=follow_up[:4096])
+                except Exception as exc:
+                    logger.warning("Could not send restore guide follow-up to %s: %s", chat_id, exc)
             self._record_progress(uploading_path, chat_id)
             logger.info("  Sent %s → chat %s (progress saved).", original_name, chat_id)
 
@@ -352,6 +425,8 @@ class BackupSenderService:
         chat_ids: tuple[str, ...],
         checksum: str | None = None,
         part_info: str | None = None,
+        dbname: str = "",
+        restore_hint: str = "",
     ) -> None:
         """Upload a job-produced file through the state machine, bypassing stability."""
         uploading_path = file_path + _UPLOADING_SUFFIX
@@ -364,6 +439,7 @@ class BackupSenderService:
         self._send_to_all_chats(
             uploading_path, original_name,
             chat_ids=chat_ids, checksum=checksum, part_info=part_info,
+            dbname=dbname, restore_hint=restore_hint,
         )
         self._complete_upload(uploading_path, original_name)
 
@@ -524,6 +600,19 @@ class BackupSenderService:
                 logger.error("Bad schedule for job %r: %s", job.name, exc)
                 raise SystemExit(1)
 
+    def _start_command_handler(self) -> None:
+        if not self._s.commands_enabled:
+            return
+        from .telegram_commands import CommandHandler
+        self._cmd_handler = CommandHandler(
+            client=self._client,
+            settings=self._s,
+            jobs=self._jobs,
+            scheduler=self._scheduler,
+            execute_job_fn=self._execute_job,
+        )
+        self._cmd_handler.start()
+
     def _run_due_jobs(self) -> bool:
         if self._scheduler is None:
             return False
@@ -621,6 +710,8 @@ class BackupSenderService:
                         chat_ids,
                         checksum=checksum if i == 1 else None,
                         part_info=part_info,
+                        dbname=job.dbname,
+                        restore_hint=job.restore_hint if i == 1 else "",
                     )
                 except Exception as exc:
                     logger.error("Upload failed for %s: %s", part.name, exc)
@@ -672,6 +763,7 @@ class BackupSenderService:
 
         with SingleInstanceLock(self._s.lock_file):
             self._setup_jobs()
+            self._start_command_handler()
             self._prepare_startup_ignore()
             self._recover_uploading_files()
 
@@ -716,5 +808,8 @@ class BackupSenderService:
                         "Unexpected error — backing off %.0fs.", self._s.retry_backoff
                     )
                     time.sleep(self._s.retry_backoff)
+
+        if self._cmd_handler is not None:
+            self._cmd_handler.stop()
 
         logger.info("Shutdown complete.")

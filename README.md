@@ -2,7 +2,7 @@
 
 A production-grade Linux background service that watches a directory, runs scheduled backup commands, uploads files to one or more Telegram chats, and deletes each file only after confirmed delivery.
 
-**One-way only** — the bot never reads incoming Telegram messages and never responds to commands. All configuration comes from local files. This is the most important security property of the project and is preserved in all code paths.
+**Default: one-way only** — the bot does not read incoming messages unless `TELEGRAM_ADMIN_CHAT_IDS` is set. When that variable is empty (the default), the bot never processes any incoming Telegram update. Two-way mode is opt-in, whitelist-only, and limited to predefined jobs.
 
 ---
 
@@ -14,6 +14,7 @@ A production-grade Linux background service that watches a directory, runs sched
 - **Multi-chat delivery**: send each backup to any number of Telegram chats/channels.
 - **File processing pipeline**: optional compress (gzip), encrypt (age/gpg), sha256 checksum in caption, and automatic split for files > 50 MB.
 - **Admin notifications**: optional status message after each job run; heartbeat to detect if the service dies; consecutive-failure alerts.
+- **Telegram command interface** (opt-in): whitelist-only two-way commands to list, trigger, or schedule jobs on demand — disabled by default when `TELEGRAM_ADMIN_CHAT_IDS` is empty.
 - **SOCKS5 proxy**: all Telegram traffic can be tunnelled through a SOCKS5 proxy.
 - **Custom Bot API server**: set `TELEGRAM_API_BASE_URL` to a local Bot API server to lift the ~50 MB file limit to ~2 GB.
 - **Rate-limit aware**: sleeps the exact duration Telegram requests on a 429 response.
@@ -63,11 +64,11 @@ TLS certificate verification is always enabled. `verify=False` is not used anywh
 ```bash
 # 1. Create a dedicated non-root user
 sudo useradd -r -s /bin/false backupbot
-sudo mkdir -p /opt/backup-telegram /backup
-sudo chown backupbot:backupbot /opt/backup-telegram /backup
+sudo mkdir -p /opt/backup-telebot /backup
+sudo chown backupbot:backupbot /opt/backup-telebot /backup
 
 # 2. Clone
-cd /opt/backup-telegram
+cd /opt/backup-telebot
 sudo -u backupbot git clone https://github.com/ahamxdev/backup-telebot .
 
 # 3. Virtual environment and install
@@ -103,7 +104,7 @@ For **channels** the ID is negative (e.g. `-1001234567890`). The bot must be an 
 
 ```bash
 sudo -u backupbot cp .env.example .env
-sudo chmod 600 /opt/backup-telegram/.env
+sudo chmod 600 /opt/backup-telebot/.env
 sudo -u backupbot nano .env
 ```
 
@@ -134,11 +135,11 @@ sudo -u backupbot nano .env
 
 ## Backup Jobs (jobs.toml)
 
-Set `BACKUP_JOBS_FILE=/opt/backup-telegram/jobs.toml` in your `.env`, then create the file:
+Set `BACKUP_JOBS_FILE=/opt/backup-telebot/jobs.toml` in your `.env`, then create the file:
 
 ```bash
-sudo -u backupbot cp scripts/sample_jobs.toml /opt/backup-telegram/jobs.toml
-sudo chmod 600 /opt/backup-telegram/jobs.toml
+sudo -u backupbot cp scripts/sample_jobs.toml /opt/backup-telebot/jobs.toml
+sudo chmod 600 /opt/backup-telebot/jobs.toml
 ```
 
 ### Job fields
@@ -282,6 +283,47 @@ TELEGRAM_API_BASE_URL=http://localhost:8081
 
 ---
 
+## Telegram Command Interface
+
+By default the bot is strictly one-way. Setting `TELEGRAM_ADMIN_CHAT_IDS` in your `.env` enables an optional two-way command interface:
+
+```ini
+# .env
+TELEGRAM_ADMIN_CHAT_IDS=123456789,987654321   # your Telegram user ID(s)
+COMMAND_RATE_LIMIT=10                          # commands per minute per admin
+```
+
+### Available commands
+
+| Command | Description |
+| --- | --- |
+| `/list` | List all jobs marked `manual_trigger = true` |
+| `/run <jobname>` | Run a job immediately |
+| `/run <jobname> every <interval>` | Schedule a job dynamically (e.g. `every 30m`) |
+| `/stop <jobname>` | Cancel a dynamic schedule |
+| `/status` | Show next scheduled run times |
+| `/help` | Show this list |
+
+### Security design
+
+- **Whitelist-only**: Messages from any sender not in `TELEGRAM_ADMIN_CHAT_IDS` are silently dropped — no reply, no error, no information leakage.
+- **Predefined jobs only**: `/run` only works for jobs explicitly marked `manual_trigger = true` in `jobs.toml`. The shell command to execute always comes from `jobs.toml` on the server. Telegram input supplies only the job name — never a shell command.
+- **Rate limiting**: Each admin is limited to `COMMAND_RATE_LIMIT` commands per minute.
+- **Disabled by default**: If `TELEGRAM_ADMIN_CHAT_IDS` is empty, the polling thread never starts and no incoming updates are ever read.
+- **No credentials in replies**: Bot replies never contain database passwords or other secrets.
+
+```toml
+# jobs.toml — mark a job as manually triggerable
+[[job]]
+name           = "mssql-bigtools"
+command        = "/opt/backup-telebot/mssql-backup.sh"
+schedule       = "every 15m"
+output         = "/backup/*.bak"
+manual_trigger = true   # enables /run mssql-bigtools from Telegram
+```
+
+---
+
 ## CLI Commands
 
 ```bash
@@ -324,9 +366,9 @@ The unit paths assume:
 
 | Path | Purpose |
 | --- | --- |
-| `/opt/backup-telegram/.env` | Environment file |
-| `/opt/backup-telegram/jobs.toml` | Jobs config (if used) |
-| `/opt/backup-telegram/venv/bin/telegram-backup-bot` | Entry point |
+| `/opt/backup-telebot/.env` | Environment file |
+| `/opt/backup-telebot/jobs.toml` | Jobs config (if used) |
+| `/opt/backup-telebot/venv/bin/telegram-backup-bot` | Entry point |
 | `/backup` | Watch directory / job output |
 
 ---
@@ -374,9 +416,10 @@ src/tgbot_backup/
 ├── jobs.py         — job definition, TOML loader, command execution
 ├── scheduler.py    — cron/interval scheduling with per-job overlap prevention
 ├── pipeline.py     — compress → encrypt → checksum → split pipeline
-├── notify.py       — admin notifications + heartbeat
-├── telegram_api.py — HTTP client (send_document, send_message, delete_webhook)
-└── service.py      — stability tracker, lock, main loop, state machine
+├── notify.py            — admin notifications + heartbeat
+├── telegram_api.py      — HTTP client (send_document, send_message, delete_webhook, get_updates)
+├── telegram_commands.py — optional two-way command interface (whitelist-only)
+└── service.py           — stability tracker, lock, main loop, state machine
 
 scripts/
 ├── get_chat_id.py         — discover chat IDs

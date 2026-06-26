@@ -24,8 +24,8 @@ Type=simple
 User=backupbot
 Group=backupbot
 
-EnvironmentFile=/opt/backup-telegram/.env
-ExecStart=/opt/backup-telegram/venv/bin/telegram-backup-bot
+EnvironmentFile=/opt/backup-telebot/.env
+ExecStart=/opt/backup-telebot/venv/bin/telegram-backup-bot
 
 Restart=always
 RestartSec=5
@@ -65,7 +65,7 @@ SystemCallFilter=@system-service @process @privileged
 SystemCallErrorNumber=EPERM
 
 # Writable paths: watch dir, backup output dir, lock file, install dir
-ReadWritePaths=/backup /tmp /opt/backup-telegram
+ReadWritePaths=/backup /tmp /opt/backup-telebot
 
 MemoryMax=1G
 TasksMax=256

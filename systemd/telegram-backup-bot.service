@@ -19,10 +19,10 @@ User=backupbot
 Group=backupbot
 
 # Load all settings from a .env-style file (owner root:backupbot, mode 0640 or 0600)
-EnvironmentFile=/opt/backup-telegram/.env
+EnvironmentFile=/opt/backup-telebot/.env
 
 # Path to the installed entry point
-ExecStart=/opt/backup-telegram/venv/bin/telegram-backup-bot
+ExecStart=/opt/backup-telebot/venv/bin/telegram-backup-bot
 
 # Restart unconditionally so the bot recovers from any crash
 Restart=always
@@ -95,7 +95,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 
 # Writable paths: watch dir, backup output dir, lock file location, install dir
-ReadWritePaths=/backup /tmp /opt/backup-telegram
+ReadWritePaths=/backup /tmp /opt/backup-telebot
 
 # Resource limits — prevents runaway jobs from exhausting the server
 MemoryMax=512M
