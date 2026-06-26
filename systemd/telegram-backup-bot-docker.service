@@ -1,0 +1,78 @@
+# =============================================================================
+# Telegram Backup Bot — DOCKER/SUDO-COMPATIBLE systemd unit
+#
+# Use this profile when jobs use 'docker exec' or 'sudo' commands.
+# It is less restrictive than the strict profile because:
+#   - NoNewPrivileges=false  (required for sudo to gain privileges)
+#   - MemoryDenyWriteExecute=false  (sudo/docker binary needs exec memory pages)
+#   - RestrictNamespaces=false  (Docker creates new namespaces)
+#   - CapabilityBoundingSet not dropped (docker group provides access via socket)
+#
+# Run 'systemd-analyze security telegram-backup-bot-docker.service' to check
+# the score. It will be lower than the strict profile — that is expected and
+# acceptable for the docker use-case.
+# =============================================================================
+
+[Unit]
+Description=Telegram Backup Sender Bot (docker/sudo-compatible)
+Documentation=https://github.com/ahamxdev/backup-telebot
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=backupbot
+Group=backupbot
+
+EnvironmentFile=/opt/backup-telegram/.env
+ExecStart=/opt/backup-telegram/venv/bin/telegram-backup-bot
+
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# --- Hardening (relaxed for docker/sudo) ------------------------------------
+
+# MUST be false for sudo to work (sudo needs to call setuid/setresuid)
+NoNewPrivileges=false
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+
+# Disabled: Docker creates network/mount/PID namespaces internally
+# RestrictNamespaces=true
+
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# Disabled: sudo and Docker binaries need executable anonymous memory pages
+# MemoryDenyWriteExecute=true
+
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Relaxed syscall filter — docker/sudo require additional syscalls beyond @system-service
+SystemCallFilter=@system-service @process @privileged
+SystemCallErrorNumber=EPERM
+
+# Writable paths: watch dir, backup output dir, lock file, install dir
+ReadWritePaths=/backup /tmp /opt/backup-telegram
+
+MemoryMax=1G
+TasksMax=256
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-backup-bot
+
+[Install]
+WantedBy=multi-user.target

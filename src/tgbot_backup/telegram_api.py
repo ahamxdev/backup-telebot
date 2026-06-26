@@ -2,6 +2,12 @@
 
 One requests.Session is kept alive for connection pooling.
 All traffic is routed through the configured SOCKS proxy when SOCKS_PROXY is set.
+
+Security notes:
+  - TLS verification is always enabled (verify=False is forbidden).
+  - The bot token is masked before appearing in any log message or exception.
+  - TELEGRAM_API_BASE_URL lets you point at a local Bot API server to lift
+    the ~50 MB file-size limit (a local server supports up to ~2 GB).
 """
 
 from __future__ import annotations
@@ -14,6 +20,19 @@ from typing import Any
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Matches the token segment in Telegram API URLs for masking
+_TOKEN_RE = re.compile(r"((?:https?://[^/]+)/bot)[^/]+(/.+)")
+
+
+def _mask_token_in_url(url: str) -> str:
+    """Replace the token portion of a Telegram Bot API URL with ***."""
+    return _TOKEN_RE.sub(r"\1***\2", url)
+
+
+def _mask_proxy_url(url: str) -> str:
+    """Replace user:pass in a proxy URL with *** for safe logging."""
+    return re.sub(r"(://)[^:@/]+:[^@/]+@", r"\1***:***@", url)
 
 
 # ---------------------------------------------------------------------------
@@ -36,16 +55,6 @@ class TelegramAPIError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _mask_proxy_url(url: str) -> str:
-    """Replace user:pass in a proxy URL with *** for safe logging."""
-    return re.sub(r"(://)[^:@/]+:[^@/]+@", r"\1***:***@", url)
-
-
-# ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
 
@@ -53,15 +62,21 @@ def _mask_proxy_url(url: str) -> str:
 class TelegramBotClient:
     """Stateful HTTP client for the Telegram Bot API."""
 
-    def __init__(self, token: str, socks_proxy: str = "", timeout: float = 120.0) -> None:
+    def __init__(
+        self,
+        token: str,
+        socks_proxy: str = "",
+        timeout: float = 120.0,
+        api_base_url: str = "https://api.telegram.org",
+    ) -> None:
         self._token = token
         self._default_timeout = timeout
+        self._base_url = api_base_url.rstrip("/")
         self._session = requests.Session()
 
         if socks_proxy:
-            # PySocks must be installed for socks5h:// support
             try:
-                import socks  # noqa: F401  (imported only to verify availability)
+                import socks  # noqa: F401  — PySocks required for socks5h://
             except ImportError:
                 raise TelegramAPIError(
                     "SOCKS_PROXY is configured but PySocks is not installed. "
@@ -77,7 +92,11 @@ class TelegramBotClient:
     # ------------------------------------------------------------------
 
     def _url(self, method: str) -> str:
-        return f"https://api.telegram.org/bot{self._token}/{method}"
+        return f"{self._base_url}/bot{self._token}/{method}"
+
+    def _safe_url(self, method: str) -> str:
+        """URL with the token masked — safe to include in log messages."""
+        return _mask_token_in_url(self._url(method))
 
     def _call(
         self,
@@ -89,26 +108,29 @@ class TelegramBotClient:
     ) -> Any:
         """POST to *method* and return the ``result`` field, or raise TelegramAPIError."""
         url = self._url(method)
+        safe_url = self._safe_url(method)
         effective_timeout = timeout if timeout is not None else self._default_timeout
         try:
             response = self._session.post(
                 url, data=data, files=files, timeout=effective_timeout
             )
         except requests.exceptions.ConnectionError as exc:
-            raise TelegramAPIError(f"Connection error calling {method}: {exc}") from exc
+            raise TelegramAPIError(f"Connection error calling {safe_url}: {exc}") from exc
         except requests.exceptions.Timeout as exc:
-            raise TelegramAPIError(f"Timeout calling {method} after {effective_timeout}s: {exc}") from exc
+            raise TelegramAPIError(
+                f"Timeout calling {safe_url} after {effective_timeout}s: {exc}"
+            ) from exc
         except requests.exceptions.RequestException as exc:
-            raise TelegramAPIError(f"Request error calling {method}: {exc}") from exc
+            raise TelegramAPIError(f"Request error calling {safe_url}: {exc}") from exc
 
         if response.status_code >= 500:
             raise TelegramAPIError(
-                f"Telegram server error {response.status_code} on {method}: "
+                f"Telegram server error {response.status_code} on {safe_url}: "
                 f"{response.text[:300]}"
             )
         if response.status_code >= 400:
             raise TelegramAPIError(
-                f"Telegram client error {response.status_code} on {method}: "
+                f"Telegram client error {response.status_code} on {safe_url}: "
                 f"{response.text[:300]}"
             )
 
@@ -116,7 +138,7 @@ class TelegramBotClient:
             body: dict[str, Any] = response.json()
         except ValueError as exc:
             raise TelegramAPIError(
-                f"Non-JSON response from {method}: {response.text[:300]}"
+                f"Non-JSON response from {safe_url}: {response.text[:300]}"
             ) from exc
 
         if not body.get("ok"):
@@ -162,6 +184,25 @@ class TelegramBotClient:
 
         return result  # type: ignore[return-value]
 
+    def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+        disable_notification: bool = False,
+    ) -> dict[str, Any]:
+        """Send a text message to *chat_id*."""
+        data: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text[:4096],  # Telegram max message length
+        }
+        if parse_mode:
+            data["parse_mode"] = parse_mode
+        if disable_notification:
+            data["disable_notification"] = "true"
+        return self._call("sendMessage", data=data)  # type: ignore[return-value]
+
     def get_updates(
         self,
         offset: int | None = None,
@@ -171,5 +212,4 @@ class TelegramBotClient:
         data: dict[str, Any] = {"timeout": timeout}
         if offset is not None:
             data["offset"] = offset
-        # Allow extra seconds for the HTTP round-trip on top of the long-poll timeout
         return self._call("getUpdates", data=data, timeout=float(timeout) + 15)  # type: ignore[return-value]

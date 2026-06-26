@@ -1,0 +1,74 @@
+# =============================================================================
+# sample_jobs.toml — example backup job definitions
+#
+# Set BACKUP_JOBS_FILE=/opt/backup-telegram/jobs.toml in your .env
+# File must be owned by root or backupbot with mode 0600:
+#   sudo chmod 600 jobs.toml
+#
+# SECURITY: Anyone who can write this file can run arbitrary commands as the
+# bot user. Protect it accordingly.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL dump via docker exec
+# ---------------------------------------------------------------------------
+# Three ways to grant access (least → most secure):
+#   1. Add backupbot to the docker group (effectively root — use with caution)
+#   2. A restricted sudoers rule (see scripts/sudoers.d.example)
+#   3. Direct network connection with pg_dump -h (no docker exec at all)
+
+[[job]]
+name    = "postgres-mydb"
+command = "docker exec my-postgres pg_dump -U postgres mydb | gzip > /backup/mydb_{date}.sql.gz"
+# Use sudo_prefix = true if using the sudoers approach and not in the docker group
+# sudo_prefix = true
+schedule = "0 1 * * *"          # every day at 01:00 UTC
+output   = "/backup/mydb_{date}.sql.gz"
+compress = false                 # already gzipped in the command
+# encrypt_recipient = "age1abc..."   # uncomment to encrypt with age
+# enforce_encryption = true          # refuse to upload if no recipient is set
+split_size_mb   = 45             # split if > 45 MB (Telegram limit)
+retention_keep  = 7              # keep the last 7 local copies
+
+
+# ---------------------------------------------------------------------------
+# MySQL / MariaDB dump via docker exec
+# ---------------------------------------------------------------------------
+[[job]]
+name    = "mysql-appdb"
+command = "docker exec my-mysql sh -c 'mysqldump -u root -p\"$MYSQL_ROOT_PASSWORD\" appdb' | gzip > /backup/appdb_{date}.sql.gz"
+schedule = "30 1 * * *"         # 01:30 UTC daily
+output   = "/backup/appdb_{date}.sql.gz"
+enabled  = false                 # disabled by default; set true to activate
+timeout_seconds = 1800           # 30 minutes max
+
+[job.env]
+# Read the password from this env var so it never appears in the log
+MYSQL_ROOT_PASSWORD = "${MYSQL_ROOT_PASSWORD}"  # set this in your .env or system env
+
+
+# ---------------------------------------------------------------------------
+# Direct PostgreSQL dump (no docker exec — most secure option)
+# ---------------------------------------------------------------------------
+[[job]]
+name    = "postgres-direct"
+command = "pg_dump -h db.internal -U backupuser -d mydb -F c -f /backup/direct_{date}.dump"
+schedule = "every 6h"
+output   = "/backup/direct_{date}.dump"
+enabled  = false
+
+[job.env]
+PGPASSWORD = "${PGPASSWORD}"     # set in system env or .env; never hardcode
+
+
+# ---------------------------------------------------------------------------
+# Simple file-system snapshot (no docker needed)
+# ---------------------------------------------------------------------------
+[[job]]
+name    = "uploads-snapshot"
+command = "tar -czf /backup/uploads_{date}.tar.gz /var/www/uploads"
+schedule = "0 2 * * 0"          # every Sunday at 02:00 UTC
+output   = "/backup/uploads_{date}.tar.gz"
+enabled  = false
+timeout_seconds = 7200          # 2 hours max for large upload dirs

@@ -1,12 +1,13 @@
 """Logic layer — the core of the bot.
 
-Three classes:
+Classes:
   FileStabilityTracker  — waits until a file stops changing before declaring it ready.
   SingleInstanceLock    — fcntl-based mutex so only one service instance runs at a time.
-  BackupSenderService   — the main watch-and-upload loop with crash-safe state machine.
+  BackupSenderService   — the main watch-and-upload loop with crash-safe state machine,
+                          optional scheduled backup jobs, and admin notifications.
 
-State machine files (all sibling to the original backup file):
-  backup.tar.gz                     — original file, present while waiting for stability
+Upload state machine (sidecar files next to each backup):
+  backup.tar.gz                     — original file, waiting for stability
   backup.tar.gz.uploading           — atomically renamed; upload in progress
   backup.tar.gz.uploading.progress  — one chat_id per line: already-confirmed sends
   backup.tar.gz.uploading.sentok    — created after ALL chats confirmed; trigger cleanup
@@ -20,7 +21,9 @@ import os
 import re
 import signal
 import socket
+import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +34,6 @@ from .telegram_api import TelegramBotClient, TelegramAPIError
 
 logger = logging.getLogger(__name__)
 
-# File-suffix constants for the upload state machine
 _UPLOADING_SUFFIX = ".uploading"
 _SENTOK_SUFFIX = ".uploading.sentok"
 _PROGRESS_SUFFIX = ".uploading.progress"
@@ -43,7 +45,6 @@ _PROGRESS_SUFFIX = ".uploading.progress"
 
 
 def _silent_remove(path: str) -> None:
-    """Delete *path*, ignoring errors if it doesn't exist."""
     try:
         os.unlink(path)
     except OSError:
@@ -65,14 +66,10 @@ def _size_human(size_bytes: int) -> str:
 
 
 class FileStabilityTracker:
-    """Holds off on declaring a file 'ready' until it hasn't changed for *stable_seconds*.
-
-    Uses time.monotonic() so wall-clock adjustments don't reset the counter.
-    """
+    """Holds off on declaring a file 'ready' until it hasn't changed for *stable_seconds*."""
 
     def __init__(self, stable_seconds: float) -> None:
         self._stable_seconds = stable_seconds
-        # path -> (size, mtime_ns, last_change_monotonic)
         self._state: dict[str, tuple[int, int, float]] = {}
 
     def is_ready(self, path: str) -> bool:
@@ -82,9 +79,7 @@ class FileStabilityTracker:
             self._state.pop(path, None)
             return False
 
-        size = st.st_size
-        mtime_ns = st.st_mtime_ns
-        now = time.monotonic()
+        size, mtime_ns, now = st.st_size, st.st_mtime_ns, time.monotonic()
 
         if path not in self._state:
             self._state[path] = (size, mtime_ns, now)
@@ -98,7 +93,6 @@ class FileStabilityTracker:
         return (now - last_change) >= self._stable_seconds
 
     def prune(self, existing_paths: set[str]) -> None:
-        """Drop tracking entries for paths no longer present (free memory)."""
         for path in list(self._state):
             if path not in existing_paths:
                 del self._state[path]
@@ -147,7 +141,7 @@ class SingleInstanceLock:
 
 
 class BackupSenderService:
-    """Main service: scans *watch_dir*, uploads new backup files to Telegram, deletes them."""
+    """Main service: watches a directory, runs scheduled jobs, uploads files to Telegram."""
 
     def __init__(self, settings: Settings) -> None:
         self._s = settings
@@ -155,12 +149,20 @@ class BackupSenderService:
             token=settings.telegram_bot_token,
             socks_proxy=settings.socks_proxy,
             timeout=settings.request_timeout,
+            api_base_url=settings.telegram_api_base_url,
         )
         self._tracker = FileStabilityTracker(settings.stable_seconds)
         self._stop = False
         self._startup_ignore: set[str] = set()
         self._public_ip: str | None = None
         self._public_ip_fetched = False
+
+        # Jobs / scheduler (lazily populated in run())
+        self._scheduler: Any | None = None
+        self._jobs: list[Any] = []
+        self._job_threads: dict[str, threading.Thread] = {}
+        self._failure_counts: dict[str, int] = {}
+        self._last_heartbeat: float = 0.0
 
     # ------------------------------------------------------------------
     # Signal handling
@@ -171,7 +173,7 @@ class BackupSenderService:
         self._stop = True
 
     # ------------------------------------------------------------------
-    # Public IP (cached, best-effort; never crashes the service)
+    # Public IP (cached, best-effort)
     # ------------------------------------------------------------------
 
     def _get_public_ip(self) -> str:
@@ -186,20 +188,32 @@ class BackupSenderService:
         return self._public_ip
 
     # ------------------------------------------------------------------
-    # Caption builder
+    # Caption builders
     # ------------------------------------------------------------------
 
-    def _build_caption(self, file_path: str, original_name: str) -> str:
+    def _build_caption(
+        self,
+        file_path: str,
+        original_name: str,
+        *,
+        checksum: str | None = None,
+        part_info: str | None = None,
+    ) -> str:
         try:
             size = os.path.getsize(file_path)
         except OSError:
             size = 0
-        return self._s.caption_template.format(
+        caption = self._s.caption_template.format(
             filename=original_name,
             size_human=_size_human(size),
             hostname=socket.gethostname(),
             public_ip=self._get_public_ip(),
         )
+        if checksum:
+            caption += f"\nSHA-256: {checksum[:16]}..."
+        if part_info:
+            caption += f"\n{part_info}"
+        return caption
 
     # ------------------------------------------------------------------
     # Progress / state-file helpers
@@ -211,7 +225,6 @@ class BackupSenderService:
 
     @staticmethod
     def _sentok_path(uploading_path: str) -> str:
-        # backup.tar.gz.uploading  →  backup.tar.gz.uploading.sentok
         return uploading_path + ".sentok"
 
     def _read_progress(self, uploading_path: str) -> set[str]:
@@ -223,7 +236,6 @@ class BackupSenderService:
             return set()
 
     def _record_progress(self, uploading_path: str, chat_id: str) -> None:
-        """Append *chat_id* to the progress file and fsync so it survives a crash."""
         prog = self._progress_path(uploading_path)
         with open(prog, "a") as fh:
             fh.write(chat_id + "\n")
@@ -231,7 +243,6 @@ class BackupSenderService:
             os.fsync(fh.fileno())
 
     def _write_sentok(self, uploading_path: str) -> None:
-        """Create the .sentok marker and fsync before any deletion."""
         sentok = self._sentok_path(uploading_path)
         with open(sentok, "w") as fh:
             fh.write("ok\n")
@@ -239,25 +250,34 @@ class BackupSenderService:
             os.fsync(fh.fileno())
 
     # ------------------------------------------------------------------
-    # Core upload (single file → all chats)
+    # Core upload (single file → one or more chats)
     # ------------------------------------------------------------------
 
-    def _send_to_all_chats(self, uploading_path: str, original_name: str) -> None:
-        """Send *uploading_path* to every configured chat, skipping already-sent ones.
+    def _send_to_all_chats(
+        self,
+        uploading_path: str,
+        original_name: str,
+        *,
+        chat_ids: tuple[str, ...] | None = None,
+        checksum: str | None = None,
+        part_info: str | None = None,
+    ) -> None:
+        """Upload *uploading_path* to every chat in *chat_ids* (or the global default).
 
-        Per-chat progress is persisted to disk after each successful send so a crash
-        can be resumed without re-uploading to chats that already received the file.
+        Progress is persisted after each chat so a crash can be resumed.
         """
+        effective_chat_ids = chat_ids if chat_ids is not None else self._s.telegram_target_chat_ids
         already_sent = self._read_progress(uploading_path)
-        caption = self._build_caption(uploading_path, original_name)
+        caption = self._build_caption(
+            uploading_path, original_name, checksum=checksum, part_info=part_info
+        )
 
-        for chat_id in self._s.telegram_target_chat_ids:
+        for chat_id in effective_chat_ids:
             if chat_id in already_sent:
                 logger.info(
                     "  chat %s already confirmed for %s — skipping.", chat_id, original_name
                 )
                 continue
-
             logger.info("  Sending %s → chat %s …", original_name, chat_id)
             self._send_with_retry(uploading_path, original_name, chat_id, caption)
             self._record_progress(uploading_path, chat_id)
@@ -270,7 +290,6 @@ class BackupSenderService:
         chat_id: str,
         caption: str,
     ) -> None:
-        """Call send_document, handling Telegram rate-limit (429) by sleeping and retrying."""
         while True:
             try:
                 self._client.send_document(
@@ -283,53 +302,36 @@ class BackupSenderService:
             except TelegramAPIError as exc:
                 if exc.error_code == 429:
                     retry_after = 30
-                    m = re.search(
-                        r"retry after (\d+)", exc.description or "", re.IGNORECASE
-                    )
+                    m = re.search(r"retry after (\d+)", exc.description or "", re.IGNORECASE)
                     if m:
                         retry_after = int(m.group(1))
                     logger.warning(
                         "Rate-limited by Telegram (chat %s). Sleeping %ds …",
-                        chat_id,
-                        retry_after,
+                        chat_id, retry_after,
                     )
                     time.sleep(retry_after)
                     continue
                 raise
 
     def _complete_upload(self, uploading_path: str, original_name: str) -> None:
-        """All chats confirmed: write sentok → delete progress → delete payload → delete sentok."""
         self._write_sentok(uploading_path)
-
-        prog = self._progress_path(uploading_path)
-        _silent_remove(prog)
-
+        _silent_remove(self._progress_path(uploading_path))
         _silent_remove(uploading_path)
-
-        sentok = self._sentok_path(uploading_path)
-        _silent_remove(sentok)
-
+        _silent_remove(self._sentok_path(uploading_path))
         logger.info("Deleted %s after confirmed upload to all chats.", original_name)
 
     # ------------------------------------------------------------------
-    # Uploading-file handler (new or recovered)
+    # Uploading-file handler (watch-dir mode)
     # ------------------------------------------------------------------
 
     def _handle_uploading_file(self, uploading_path: str) -> None:
-        """Drive an upload to completion, whether fresh or resumed after a crash.
-
-        Crash recovery rules:
-          .sentok present   → all sends confirmed, only cleanup remains
-          .sentok absent    → use .progress to find which chats still need sending
-        """
-        # Strip the .uploading suffix to recover the original display name
+        """Drive an upload (from watch-dir) to completion, resuming after crashes."""
         original_name = Path(uploading_path).name.removesuffix(_UPLOADING_SUFFIX)
         sentok = self._sentok_path(uploading_path)
 
         if os.path.exists(sentok):
             logger.info(
-                "Found .sentok for %s — all sends confirmed; finishing cleanup.",
-                original_name,
+                "Found .sentok for %s — all sends confirmed; finishing cleanup.", original_name
             )
             _silent_remove(uploading_path)
             _silent_remove(sentok)
@@ -340,11 +342,36 @@ class BackupSenderService:
         self._complete_upload(uploading_path, original_name)
 
     # ------------------------------------------------------------------
+    # Direct upload (job output — skips stability check)
+    # ------------------------------------------------------------------
+
+    def _upload_job_output(
+        self,
+        file_path: str,
+        original_name: str,
+        chat_ids: tuple[str, ...],
+        checksum: str | None = None,
+        part_info: str | None = None,
+    ) -> None:
+        """Upload a job-produced file through the state machine, bypassing stability."""
+        uploading_path = file_path + _UPLOADING_SUFFIX
+        try:
+            os.rename(file_path, uploading_path)
+        except OSError as exc:
+            logger.warning("Could not claim %s (rename failed): %s", original_name, exc)
+            return
+        logger.info("Claimed job output %s → %s", original_name, Path(uploading_path).name)
+        self._send_to_all_chats(
+            uploading_path, original_name,
+            chat_ids=chat_ids, checksum=checksum, part_info=part_info,
+        )
+        self._complete_upload(uploading_path, original_name)
+
+    # ------------------------------------------------------------------
     # Startup helpers
     # ------------------------------------------------------------------
 
     def _prepare_startup_ignore(self) -> None:
-        """Record pre-existing files so they are not sent when startup_send_existing=false."""
         if self._s.startup_send_existing:
             return
         watch = Path(self._s.watch_dir)
@@ -358,7 +385,6 @@ class BackupSenderService:
             )
 
     def _recover_uploading_files(self) -> None:
-        """On startup, resume any .uploading files left by a previous crash."""
         watch = Path(self._s.watch_dir)
         stale_threshold_s = self._s.delete_uploading_older_than_hours * 3600
 
@@ -369,21 +395,17 @@ class BackupSenderService:
         for p in candidates:
             if not p.is_file():
                 continue
-
             if stale_threshold_s > 0:
                 age_s = time.time() - p.stat().st_mtime
                 if age_s > stale_threshold_s:
                     logger.warning(
                         "Stale .uploading file %s (age %.1fh > limit %.1fh) — removing.",
-                        p.name,
-                        age_s / 3600,
-                        self._s.delete_uploading_older_than_hours,
+                        p.name, age_s / 3600, self._s.delete_uploading_older_than_hours,
                     )
                     _silent_remove(self._progress_path(str(p)))
                     _silent_remove(self._sentok_path(str(p)))
                     _silent_remove(str(p))
                     continue
-
             logger.info("Recovering interrupted upload: %s", p.name)
             try:
                 self._handle_uploading_file(str(p))
@@ -391,12 +413,11 @@ class BackupSenderService:
                 logger.exception("Failed to recover %s; will retry next cycle.", p.name)
 
     # ------------------------------------------------------------------
-    # New-file processing (called from the main cycle)
+    # New-file processing (watch-dir mode)
     # ------------------------------------------------------------------
 
     def _process_new_file(self, file_path: str) -> None:
         original_name = Path(file_path).name
-
         try:
             size = os.path.getsize(file_path)
         except OSError as exc:
@@ -406,9 +427,7 @@ class BackupSenderService:
         if size > self._s.max_file_size_bytes:
             logger.warning(
                 "File %s is %.1f MB, exceeds MAX_FILE_SIZE_MB=%d — skipping.",
-                original_name,
-                size / (1024 * 1024),
-                self._s.max_file_size_mb,
+                original_name, size / (1024 * 1024), self._s.max_file_size_mb,
             )
             return
 
@@ -424,18 +443,13 @@ class BackupSenderService:
         self._complete_upload(uploading_path, original_name)
 
     # ------------------------------------------------------------------
-    # Main cycle
+    # Watch-dir cycle
     # ------------------------------------------------------------------
 
     def _process_cycle(self) -> bool:
-        """Scan the watch directory once and upload any ready files.
-
-        Returns True if at least one file was processed (caller skips the scan sleep).
-        """
         watch = Path(self._s.watch_dir)
         processed = False
 
-        # 1. Handle any leftover .uploading files first
         for p in sorted(
             watch.glob(f"*{_UPLOADING_SUFFIX}"),
             key=lambda x: x.stat().st_mtime if x.exists() else 0,
@@ -447,7 +461,6 @@ class BackupSenderService:
                 except Exception:
                     logger.exception("Error handling %s.", p.name)
 
-        # 2. Gather normal candidate files
         try:
             candidates = sorted(
                 [
@@ -476,12 +489,178 @@ class BackupSenderService:
                 self._process_new_file(path_str)
                 processed = True
             except TelegramAPIError:
-                # Let caller catch and sleep with retry_backoff
                 raise
             except Exception:
                 logger.exception("Unexpected error processing %s.", p.name)
 
         return processed
+
+    # ------------------------------------------------------------------
+    # Jobs system
+    # ------------------------------------------------------------------
+
+    def _setup_jobs(self) -> None:
+        if not self._s.backup_jobs_file:
+            return
+
+        from .jobs import load_jobs
+        from .scheduler import JobScheduler
+
+        try:
+            self._jobs = load_jobs(self._s.backup_jobs_file)
+        except Exception as exc:
+            logger.error("Failed to load jobs from %s: %s", self._s.backup_jobs_file, exc)
+            raise SystemExit(1)
+
+        if not self._jobs:
+            logger.info("No enabled jobs found in %s.", self._s.backup_jobs_file)
+            return
+
+        self._scheduler = JobScheduler()
+        for job in self._jobs:
+            try:
+                self._scheduler.add_job(job.name, job.schedule)
+            except ValueError as exc:
+                logger.error("Bad schedule for job %r: %s", job.name, exc)
+                raise SystemExit(1)
+
+    def _run_due_jobs(self) -> bool:
+        if self._scheduler is None:
+            return False
+
+        now = datetime.now(tz=timezone.utc)
+        due = self._scheduler.due_jobs(now)
+        if not due:
+            return False
+
+        job_map = {j.name: j for j in self._jobs}
+        for name in due:
+            if not self._scheduler.try_acquire(name):
+                logger.info("Job %r is still running; skipping this cycle.", name)
+                continue
+
+            job = job_map.get(name)
+            if job is None:
+                self._scheduler.release(name)
+                continue
+
+            self._scheduler.mark_ran(name, now)
+            t = threading.Thread(
+                target=self._execute_job,
+                args=(job,),
+                name=f"job-{name}",
+                daemon=True,
+            )
+            t.start()
+            self._job_threads[name] = t
+
+        return True
+
+    def _execute_job(self, job: Any) -> None:
+        """Run one job, process its output through the pipeline, and upload."""
+        from .jobs import run_job
+        from .pipeline import process_file
+        from .notify import send_job_status, send_alert
+
+        try:
+            result = run_job(job)
+        finally:
+            if self._scheduler is not None:
+                self._scheduler.release(job.name)
+
+        if result.success:
+            self._failure_counts[job.name] = 0
+        else:
+            self._failure_counts[job.name] = self._failure_counts.get(job.name, 0) + 1
+
+        if not result.success or not result.output_paths:
+            if self._s.admin_chat_id:
+                send_job_status(self._client, self._s.admin_chat_id, result)
+                count = self._failure_counts.get(job.name, 0)
+                if self._s.alert_consecutive_failures > 0 and count >= self._s.alert_consecutive_failures:
+                    send_alert(self._client, self._s.admin_chat_id, job.name, count)
+            return
+
+        chat_ids = job.target_chat_ids or self._s.telegram_target_chat_ids
+
+        for output_path in result.output_paths:
+            try:
+                parts, checksum = process_file(
+                    output_path,
+                    compress=job.compress,
+                    encrypt_recipient=job.encrypt_recipient,
+                    encrypt_tool=self._s.default_encrypt_tool,
+                    enforce_encryption=job.enforce_encryption,
+                    split_size_mb=job.split_size_mb,
+                )
+            except Exception as exc:
+                logger.error("Pipeline failed for job %r (%s): %s", job.name, output_path, exc)
+                if self._s.admin_chat_id:
+                    from .jobs import JobResult
+                    fake = JobResult(
+                        name=job.name,
+                        success=False,
+                        duration_seconds=result.duration_seconds,
+                        error_message=f"Pipeline error: {exc}",
+                    )
+                    send_job_status(self._client, self._s.admin_chat_id, fake)
+                continue
+
+            total = len(parts)
+            for i, part in enumerate(parts, 1):
+                part_info = f"Part {i}/{total}" if total > 1 else None
+                if total > 1:
+                    part_info = (
+                        f"Part {i}/{total}  "
+                        f"(reassemble: cat {output_path.name}.part* > {output_path.name})"
+                    )
+                try:
+                    self._upload_job_output(
+                        str(part),
+                        part.name,
+                        chat_ids,
+                        checksum=checksum if i == 1 else None,
+                        part_info=part_info,
+                    )
+                except Exception as exc:
+                    logger.error("Upload failed for %s: %s", part.name, exc)
+
+        if self._s.admin_chat_id:
+            send_job_status(
+                self._client,
+                self._s.admin_chat_id,
+                result,
+                filename=result.output_paths[0].name if result.output_paths else None,
+            )
+
+        # Retention: keep last N versions by mtime
+        if job.retention_keep > 0:
+            self._apply_retention(job)
+
+    def _apply_retention(self, job: Any) -> None:
+        from .jobs import _find_outputs
+        all_outputs = _find_outputs(job)
+        to_delete = all_outputs[: max(0, len(all_outputs) - job.retention_keep)]
+        for p in to_delete:
+            try:
+                p.unlink()
+                logger.info("Retention: deleted old output %s", p.name)
+            except OSError as exc:
+                logger.warning("Retention: could not delete %s: %s", p.name, exc)
+
+    # ------------------------------------------------------------------
+    # Heartbeat
+    # ------------------------------------------------------------------
+
+    def _maybe_send_heartbeat(self) -> None:
+        if not self._s.admin_chat_id or self._s.heartbeat_interval_hours <= 0:
+            return
+        interval_s = self._s.heartbeat_interval_hours * 3600
+        if time.monotonic() - self._last_heartbeat >= interval_s:
+            from .notify import send_heartbeat
+            active = [n for n, t in self._job_threads.items() if t.is_alive()]
+            send_heartbeat(self._client, self._s.admin_chat_id, active_jobs=active)
+            self._last_heartbeat = time.monotonic()
 
     # ------------------------------------------------------------------
     # Entry point
@@ -492,6 +671,7 @@ class BackupSenderService:
         signal.signal(signal.SIGINT, self._handle_signal)
 
         with SingleInstanceLock(self._s.lock_file):
+            self._setup_jobs()
             self._prepare_startup_ignore()
             self._recover_uploading_files()
 
@@ -502,23 +682,33 @@ class BackupSenderService:
                     logger.warning("deleteWebhook failed; continuing without clearing.")
 
             logger.info(
-                "Watching %s (glob=%r, stable=%.0fs, scan=%.0fs).",
+                "Watching %s (glob=%r, stable=%.0fs, scan=%.0fs).%s",
                 self._s.watch_dir,
                 self._s.file_glob,
                 self._s.stable_seconds,
                 self._s.scan_interval,
+                f"  Jobs: {len(self._jobs)}" if self._jobs else "",
             )
 
             while not self._stop:
                 try:
-                    processed = self._process_cycle()
-                    if not processed:
-                        time.sleep(self._s.scan_interval)
+                    file_processed = self._process_cycle()
+                    self._run_due_jobs()
+                    self._maybe_send_heartbeat()
+                    if not file_processed:
+                        # Sleep the shorter of scan_interval and time-to-next-job
+                        if self._scheduler is not None:
+                            sleep_s = min(
+                                self._s.scan_interval,
+                                self._scheduler.seconds_until_next(),
+                            )
+                        else:
+                            sleep_s = self._s.scan_interval
+                        time.sleep(max(0.1, sleep_s))
                 except TelegramAPIError as exc:
                     logger.error(
                         "Telegram API error: %s — backing off %.0fs.",
-                        exc,
-                        self._s.retry_backoff,
+                        exc, self._s.retry_backoff,
                     )
                     time.sleep(self._s.retry_backoff)
                 except Exception:

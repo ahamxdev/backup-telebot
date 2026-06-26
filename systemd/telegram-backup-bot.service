@@ -1,3 +1,12 @@
+# =============================================================================
+# Telegram Backup Bot — STRICT systemd unit (no docker/sudo)
+#
+# Use this profile when the bot does NOT need to run docker or sudo commands.
+# Run 'systemd-analyze security telegram-backup-bot.service' to check the score.
+#
+# For docker/sudo access, see telegram-backup-bot-docker.service instead.
+# =============================================================================
+
 [Unit]
 Description=Telegram Backup Sender Bot
 Documentation=https://github.com/ahamxdev/backup-telebot
@@ -9,27 +18,90 @@ Type=simple
 User=backupbot
 Group=backupbot
 
-# Load all settings from a .env-style file (one KEY=VALUE per line)
+# Load all settings from a .env-style file (owner root:backupbot, mode 0640 or 0600)
 EnvironmentFile=/opt/backup-telegram/.env
 
-# Path to the installed entry point (adjust if installed in a virtualenv)
+# Path to the installed entry point
 ExecStart=/opt/backup-telegram/venv/bin/telegram-backup-bot
 
 # Restart unconditionally so the bot recovers from any crash
 Restart=always
 RestartSec=5
 
-# Allow graceful shutdown: SIGINT triggers the stop-flag, service has 30 s to finish
+# Allow graceful shutdown: SIGINT triggers the stop-flag, service has 30s to finish
 KillSignal=SIGINT
 TimeoutStopSec=30
 
-# Harden the process slightly
+# --- Hardening ---------------------------------------------------------------
+
+# No new privileges — prevents setuid/setgid escalation
 NoNewPrivileges=true
 
-# Grant write access to the backup directory, the lock file location, and the install dir
+# Make / read-only; only explicitly listed paths are writable
+ProtectSystem=strict
+
+# Hide /home and /root from the service
+ProtectHome=true
+
+# Private /tmp and /var/tmp — isolates temp files from other processes
+PrivateTmp=true
+
+# No access to physical devices
+PrivateDevices=true
+
+# Prevent modification of kernel tunables
+ProtectKernelTunables=true
+
+# Prevent loading kernel modules
+ProtectKernelModules=true
+
+# Prevent reading kernel log buffer (/dev/kmsg)
+ProtectKernelLogs=true
+
+# Read-only view of /sys/fs/cgroup
+ProtectControlGroups=true
+
+# Prevent changing the system clock
+ProtectClock=true
+
+# Prevent changing the hostname or domainname
+ProtectHostname=true
+
+# Block namespace creation (unshare, clone with CLONE_NEW*)
+RestrictNamespaces=true
+
+# Prevent real-time scheduling (SCHED_FIFO, SCHED_RR)
+RestrictRealtime=true
+
+# Prevent creation of SUID/SGID files
+RestrictSUIDSGID=true
+
+# Prevent personality() syscall (used for 32-bit emulation)
+LockPersonality=true
+
+# Block mmap/mprotect with PROT_EXEC on writable memory (prevents code injection)
+# Disable if Python complains with 'Operation not permitted' on some builds
+MemoryDenyWriteExecute=true
+
+# Allow only IPv4, IPv6, and Unix domain sockets (needed for systemd journal)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Allow only the syscalls needed by a typical service (blocks ~250 rare syscalls)
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Drop ALL capabilities — the bot needs none
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Writable paths: watch dir, backup output dir, lock file location, install dir
 ReadWritePaths=/backup /tmp /opt/backup-telegram
 
-# Redirect stdout/stderr to the journal
+# Resource limits — prevents runaway jobs from exhausting the server
+MemoryMax=512M
+TasksMax=64
+
+# Log to the journal with a clear identifier
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=telegram-backup-bot

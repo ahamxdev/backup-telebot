@@ -88,21 +88,46 @@ _DEFAULT_CAPTION = (
 
 @dataclass(frozen=True)
 class Settings:
+    # --- Core (required) ---
     telegram_bot_token: str
     telegram_target_chat_ids: tuple[str, ...]
     watch_dir: str
+
+    # --- File selection ---
     file_glob: str
     stable_seconds: float
     scan_interval: float
     retry_backoff: float
     max_file_size_mb: int
+
+    # --- Startup behaviour ---
     startup_send_existing: bool
     clear_webhook_on_start: bool
+
+    # --- Crash recovery ---
     delete_uploading_older_than_hours: float
+
+    # --- Concurrency guard ---
     lock_file: str
+
+    # --- Caption ---
     caption_template: str
+
+    # --- Network ---
     request_timeout: float
     socks_proxy: str
+    telegram_api_base_url: str  # override for local Bot API server
+
+    # --- Jobs system ---
+    backup_jobs_file: str         # path to jobs.toml; empty = jobs disabled
+
+    # --- Admin notifications ---
+    admin_chat_id: str            # empty = notifications disabled
+    heartbeat_interval_hours: float  # 0 = disabled
+    alert_consecutive_failures: int  # 0 = disabled
+
+    # --- Pipeline defaults (overridable per job) ---
+    default_encrypt_tool: str     # "age" or "gpg"
 
     @property
     def max_file_size_bytes(self) -> int:
@@ -115,8 +140,12 @@ class Settings:
 
 
 def load_settings(env_file: str | None = None) -> Settings:
-    """Load settings from *env_file* (if given) then from os.environ."""
+    """Load settings from *env_file* (if given) then from os.environ.
+
+    Also checks that the .env file itself is not group/world-writable.
+    """
     if env_file:
+        _check_env_file_permissions(env_file)
         _load_dotenv(env_file)
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -126,6 +155,12 @@ def load_settings(env_file: str | None = None) -> Settings:
     chat_ids = _split_csv(os.environ.get("TELEGRAM_TARGET_CHAT_IDS", ""))
     if not chat_ids:
         raise ValueError("TELEGRAM_TARGET_CHAT_IDS is required but not set.")
+
+    for cid in chat_ids:
+        if not re.match(r"^-?\d+$", cid):
+            raise ValueError(
+                f"Invalid chat_id {cid!r} in TELEGRAM_TARGET_CHAT_IDS (must be numeric)."
+            )
 
     watch_dir = os.environ.get("WATCH_DIR", "").strip()
     if not watch_dir:
@@ -149,4 +184,31 @@ def load_settings(env_file: str | None = None) -> Settings:
         caption_template=os.environ.get("CAPTION_TEMPLATE", _DEFAULT_CAPTION),
         request_timeout=_parse_float(os.environ.get("REQUEST_TIMEOUT"), 120.0),
         socks_proxy=os.environ.get("SOCKS_PROXY", "").strip(),
+        telegram_api_base_url=os.environ.get(
+            "TELEGRAM_API_BASE_URL", "https://api.telegram.org"
+        ).rstrip("/"),
+        backup_jobs_file=os.environ.get("BACKUP_JOBS_FILE", "").strip(),
+        admin_chat_id=os.environ.get("ADMIN_CHAT_ID", "").strip(),
+        heartbeat_interval_hours=_parse_float(os.environ.get("HEARTBEAT_INTERVAL_HOURS"), 0.0),
+        alert_consecutive_failures=_parse_int(os.environ.get("ALERT_CONSECUTIVE_FAILURES"), 3),
+        default_encrypt_tool=os.environ.get("ENCRYPT_TOOL", "age").strip().lower(),
     )
+
+
+def _check_env_file_permissions(path: str) -> None:
+    """Warn (not fatal) if the .env file is group/world-readable.
+
+    The .env file contains the bot token, so it should be readable only by
+    the service user. We warn rather than abort to avoid breaking existing setups.
+    """
+    try:
+        mode = os.stat(path).st_mode
+    except FileNotFoundError:
+        return
+    if mode & 0o044:  # group-read or world-read
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            ".env file %r has loose permissions (mode %s). "
+            "Consider 'chmod 600 %s' to protect the bot token.",
+            path, oct(mode), path,
+        )

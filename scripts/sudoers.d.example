@@ -1,0 +1,31 @@
+# =============================================================================
+# sudoers.d example — restricted sudo access for the backupbot user
+#
+# This is the "more secure" alternative to adding backupbot to the docker group.
+# It allows ONLY the specific, fully-specified commands below — no wildcards.
+#
+# INSTALLATION:
+#   sudo cp scripts/sudoers.d.example /etc/sudoers.d/backupbot
+#   sudo chmod 440 /etc/sudoers.d/backupbot
+#   sudo visudo -c   # verify syntax before reloading
+#
+# IMPORTANT: Adjust the commands below to match your exact docker exec commands.
+# Never use wildcards (ALL, *) — that negates the security benefit.
+#
+# Also: the systemd unit must have NoNewPrivileges=false for sudo to work.
+# Use the telegram-backup-bot-docker.service unit profile instead of the
+# strict profile.
+# =============================================================================
+
+# Allow backupbot to run specific docker exec backup commands without a password
+Defaults:backupbot !requiretty
+
+# PostgreSQL backup
+backupbot ALL=(root) NOPASSWD: /usr/bin/docker exec my-postgres pg_dump -U postgres mydb
+
+# MySQL backup (note: -p flag accepts the password inline — be careful with quoting)
+# backupbot ALL=(root) NOPASSWD: /usr/bin/docker exec my-mysql sh -c mysqldump *
+
+# If you use a wrapper script (recommended for complex commands):
+# backupbot ALL=(root) NOPASSWD: /opt/backup-telegram/scripts/run_postgres_backup.sh
+# (The wrapper script is owned by root:root with mode 0750)
