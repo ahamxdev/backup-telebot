@@ -1,0 +1,138 @@
+from domain.enums import (
+    CompressionFormat,
+    CompressionPreset,
+    DatabaseEngine,
+    ScheduleKind,
+    SourceType,
+    TLSMode,
+)
+
+SUPERADMIN_ACTIONS = {
+    "backups",
+    "admins",
+    "audit",
+    "health",
+    "settings",
+    "add_admin",
+    "edit_admin",
+    "delete_admin",
+    "refresh_admins",
+    "add_backup",
+    "edit_backup",
+    "delete_backup",
+    "refresh_backups",
+    "remote_servers",
+    "add_server",
+    "edit_server",
+    "delete_server",
+    "refresh_servers",
+    "backup_timezone",
+    "active_runs",
+    "run_history",
+}
+SOURCE_ACTIONS = {
+    "source_database": SourceType.DATABASE,
+    "source_files_directories": SourceType.FILES_DIRECTORIES,
+}
+ENGINE_ACTIONS = {
+    "database_postgresql": DatabaseEngine.POSTGRESQL,
+    "database_mysql": DatabaseEngine.MYSQL_MARIADB,
+    "database_mssql": DatabaseEngine.MSSQL,
+}
+TLS_ACTIONS = {
+    "tls_disabled": TLSMode.DISABLED,
+    "tls_preferred": TLSMode.PREFERRED,
+    "tls_required": TLSMode.REQUIRED,
+    "tls_verify_ca": TLSMode.VERIFY_CA,
+    "tls_verify_full": TLSMode.VERIFY_FULL,
+}
+SCHEDULE_ACTIONS = {
+    "schedule_manual": ScheduleKind.MANUAL,
+    "schedule_minutes": ScheduleKind.EVERY_N_MINUTES,
+    "schedule_hours": ScheduleKind.EVERY_N_HOURS,
+    "schedule_days": ScheduleKind.EVERY_N_DAYS,
+    "schedule_daily": ScheduleKind.DAILY,
+    "schedule_weekly": ScheduleKind.WEEKLY,
+    "schedule_monthly": ScheduleKind.MONTHLY,
+}
+COMPRESSION_ACTIONS = {
+    "compression_none": CompressionFormat.NONE,
+    "compression_zstandard": CompressionFormat.ZSTANDARD,
+    "compression_gzip": CompressionFormat.GZIP,
+    "compression_xz": CompressionFormat.XZ,
+    "compression_bzip2": CompressionFormat.BZIP2,
+    "compression_zip": CompressionFormat.ZIP,
+    "compression_7z": CompressionFormat.SEVEN_Z,
+}
+PRESET_ACTIONS = {
+    "preset_fast": CompressionPreset.FAST,
+    "preset_balanced": CompressionPreset.BALANCED,
+    "preset_high": CompressionPreset.HIGH,
+    "preset_maximum": CompressionPreset.MAXIMUM,
+}
+PAGE_SIZE = 8
+RUN_PAGE_SIZE = 8
+DISPLAYABLE_RUN_ERROR_CODES = frozenset(
+    {
+        "BACKUP_TIMEOUT",
+        "CANCELLED",
+        "DELIVERY_ACTION_REQUIRED",
+        "DISK_CAPACITY",
+        "EMPTY_ARCHIVE",
+        "EMPTY_BACKUP",
+        "INVALID_COMPRESSION",
+        "INVALID_ENCRYPTION",
+        "INVALID_FENCE",
+        "INVALID_MANIFEST",
+        "INVALID_PENDING_PATH",
+        "INVALID_PROFILE",
+        "MISSING_SECRET",
+        "MSSQL_ARTIFACT_MISSING",
+        "MSSQL_BACKUP_FAILED",
+        "MSSQL_REMOTE_DISABLED",
+        "MSSQL_TIMEOUT",
+        "MYSQL_CLIENT_MISSING",
+        "MYSQL_CLIENT_UNRECOGNIZED",
+        "MYSQL_CLIENT_UNSUPPORTED",
+        "MYSQL_CLIENT_VERSION_UNKNOWN",
+        "MYSQL_DUMP_FAILED",
+        "MYSQL_TLS_CA_MISSING",
+        "NON_ATOMIC_SPOOL",
+        "OPERATION_STOPPED",
+        "PENDING_ARTIFACT_MISSING",
+        "PENDING_CHECKSUM_MISMATCH",
+        "PG_CLIENT_MISSING",
+        "PIPELINE_FAILED",
+        "PROCESS_FAILED",
+        "PROCESS_TIMEOUT",
+        "REMOTE_AUTHENTICATION_FAILED",
+        "REMOTE_HOST_KEY_MISMATCH",
+        "REMOTE_RSYNC_FAILED",
+        "REMOTE_RSYNC_MISSING",
+        "REMOTE_RSYNC_TIMEOUT",
+        "REMOTE_RSYNC_UNAVAILABLE",
+        "REMOTE_SSH_CHECK_FAILED",
+        "RSYNC_CONNECTION_FAILED",
+        "RSYNC_PERMISSION_DENIED",
+        "RSYNC_REMOTE_PATH_NOT_FOUND",
+        "RSYNC_TIMEOUT",
+        "RSYNC_TRANSFER_FAILED",
+        "SOURCE_BYTES_LIMIT",
+        "SOURCE_CHANGED",
+        "SOURCE_DEPTH_LIMIT",
+        "SOURCE_FILE_COUNT_LIMIT",
+        "SOURCE_FILE_SIZE_LIMIT",
+        "SQLITE_VERIFY_FAILED",
+        "SSH_CONNECT_TIMEOUT",
+        "SSH_CONNECTION_LOST",
+        "SSH_HOST_KEY_MISSING",
+        "UNSAFE_ARCHIVE",
+        "UNSAFE_SOURCE",
+        "UNSUPPORTED_SOURCE",
+        "UPLOAD_LIMIT",
+    }
+)
+DATABASE_CREDENTIAL = "db-auth"
+SSH_IDENTITY = "ssh-identity"
+SSH_UNLOCK = "ssh-unlock"
+AGE_UNLOCK = "age-unlock"

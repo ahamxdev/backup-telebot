@@ -1,0 +1,35 @@
+worker-1  | Connecting to 149.154.167.92:443/TcpFull...
+worker-1  | Connection to 149.154.167.92:443/TcpFull complete!
+worker-1  | Host canonicalization disabled
+worker-1  | Opening SSH connection to 130.185.72.19, port 22422
+worker-1  | [conn=0] Connected to SSH server at 130.185.72.19, port 22422
+worker-1  | [conn=0]   Local address: 172.19.0.4, port 47616
+worker-1  | [conn=0]   Peer address: 130.185.72.19, port 22422
+worker-1  | [conn=0] Beginning auth for user root
+worker-1  | [conn=0] Auth for user root succeeded
+worker-1  | [conn=0] Closing connection
+worker-1  | [conn=0] Sending disconnect: Disconnected by application (11)
+worker-1  | [conn=0] Connection closed
+worker-1  | [2m2026-09-14T19:33:29.566175Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mPIPELINE_FAILED[0m [36mrun_id[0m=[35m14[0m [36mstage[0m=[35mCOMPLETE[0m [36mstatus[0m=[35mFAILED[0m [36mtransition[0m=[35mfailed[0m
+worker-1  | [2m2026-09-14T19:37:16.288471Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mNone[0m [36mrun_id[0m=[35m16[0m [36mstage[0m=[35mQUEUED[0m [36mstatus[0m=[35mQUEUED[0m [36mtransition[0m=[35mqueued[0m
+worker-1  | [2m2026-09-14T19:37:16.338708Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mNone[0m [36mrun_id[0m=[35m16[0m [36mstage[0m=[35mBACKUP[0m [36mstatus[0m=[35mRUNNING[0m [36mtransition[0m=[35mstarted[0m
+worker-1  | Host canonicalization disabled
+worker-1  | Opening SSH connection to 130.185.72.19, port 22422
+worker-1  | [conn=1] Connected to SSH server at 130.185.72.19, port 22422
+worker-1  | [conn=1]   Local address: 172.19.0.4, port 52568
+worker-1  | [conn=1]   Peer address: 130.185.72.19, port 22422
+worker-1  | [conn=1] Beginning auth for user root
+worker-1  | [conn=1] Auth for user root succeeded
+worker-1  | [conn=1] Closing connection
+worker-1  | [conn=1] Sending disconnect: Disconnected by application (11)
+worker-1  | [conn=1] Connection closed
+worker-1  | [2m2026-09-14T19:41:43.469612Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mPIPELINE_FAILED[0m [36mrun_id[0m=[35m16[0m [36mstage[0m=[35mCOMPLETE[0m [36mstatus[0m=[35mFAILED[0m [36mtransition[0m=[35mfailed[0m
+worker-1  | [2m2026-09-14T19:42:17.052154Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mNone[0m [36mrun_id[0m=[35m17[0m [36mstage[0m=[35mQUEUED[0m [36mstatus[0m=[35mQUEUED[0m [36mtransition[0m=[35mqueued[0m
+worker-1  | [2m2026-09-14T19:42:17.098495Z[0m [[32m[1minfo     [0m] [1mbackup_run_transition         [0m [36merror_code[0m=[35mNone[0m [36mrun_id[0m=[35m17[0m [36mstage[0m=[35mBACKUP[0m [36mstatus[0m=[35mRUNNING[0m [36mtransition[0m=[35mstarted[0m
+worker-1  | Host canonicalization disabled
+worker-1  | Opening SSH connection to 130.185.72.19, port 22422
+worker-1  | [conn=2] Connected to SSH server at 130.185.72.19, port 22422
+worker-1  | [conn=2]   Local address: 172.19.0.4, port 56704
+worker-1  | [conn=2]   Peer address: 130.185.72.19, port 22422
+worker-1  | [conn=2] Beginning auth for user root
+worker-1  | [conn=2] Auth for user root succeeded

@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "backup-telebot"
+version = "0.1.0"
+description = "Security-first Telegram backup control plane (Phase 1)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "aiosqlite>=0.21.0",
+  "alembic>=1.20.0",
+  "asyncpg>=0.30.0,<1",
+  "asyncssh>=2.24.0,<3",
+  "cryptography>=50.0.0,<51",
+  "pydantic-settings>=2.15.0",
+  "pyOpenSSL>=26.4.0,<27",
+  "python-tds>=1.17.1,<2",
+  "python-socks[asyncio]>=2.7.3",
+  "sqlalchemy[asyncio]>=2.0.52",
+  "structlog>=25.5.0",
+  "telethon>=1.44.0,<2",
+  "typer>=0.27.2",
+]
+
+[project.scripts]
+backup-bot = "main:entrypoint"
+backup-worker = "bootstrap.worker:entrypoint"
+backupctl = "cli.main:app"
+
+[dependency-groups]
+dev = [
+  "bandit>=1.8.6",
+  "mypy>=1.18.2",
+  "pip-audit>=2.9.0",
+  "pytest>=8.4.2",
+  "pytest-asyncio>=1.2.0",
+  "ruff>=0.14.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/app_logging",
+  "src/application",
+  "src/bootstrap",
+  "src/cli",
+  "src/config",
+  "src/database",
+  "src/domain",
+  "src/infrastructure",
+  "src/main.py",
+  "src/pipeline",
+  "src/presentation",
+  "src/security",
+  "src/version.py",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".runtime"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"migrations/**" = ["E501"]
+"src/domain/enums.py" = ["S105"]
+"src/presentation/telegram/runtime/fsm.py" = ["S105"]
+"src/application/remote_server_service.py" = ["S105"]
+"src/pipeline/acquisition/*.py" = ["ASYNC240"]
+"src/pipeline/process.py" = ["ASYNC109"]
+"src/pipeline/transforms.py" = ["ASYNC109", "ASYNC240"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["telethon", "telethon.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pytds", "pytds.*"]
+ignore_missing_imports = true
