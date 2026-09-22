@@ -139,7 +139,7 @@ def yes_no(language: LanguageCode) -> list[list[Button]]:
 def schedule_types(language: LanguageCode) -> list[list[Button]]:
     return rows(
         language,
-        ("schedule_manual",),
+        ("schedule_manual", "schedule_once"),
         ("schedule_minutes", "schedule_hours"),
         ("schedule_days", "schedule_daily"),
         ("schedule_weekly", "schedule_monthly"),

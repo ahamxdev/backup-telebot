@@ -27,29 +27,37 @@ def version() -> None:
     typer.echo(__version__)
 
 
-async def _bootstrap(settings: Settings) -> tuple[int, bool]:
-    if settings.TELEGRAM_SUPERADMIN_ID is None:
-        raise ValueError("TELEGRAM_SUPERADMIN_ID is required")
+async def _bootstrap(settings: Settings) -> list[tuple[int, bool]]:
+    superadmin_ids = settings.superadmin_telegram_ids()
+    if not superadmin_ids:
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS or TELEGRAM_SUPERADMIN_ID is required")
     database = Database(settings.DATABASE_URL)
     try:
         async with database.session_factory() as session:
-            user, created = await BootstrapService(session).bootstrap_superadmin(
-                settings.TELEGRAM_SUPERADMIN_ID, settings.TELEGRAM_SUPERADMIN_LANGUAGE
-            )
-            return user.telegram_user_id, created
+            service = BootstrapService(session)
+            results: list[tuple[int, bool]] = []
+            for telegram_id in superadmin_ids:
+                user, created = await service.bootstrap_superadmin(
+                    telegram_id, settings.TELEGRAM_SUPERADMIN_LANGUAGE
+                )
+                results.append((user.telegram_user_id, created))
+            return results
     finally:
         await database.dispose()
 
 
 @app.command("bootstrap-superadmin")
 def bootstrap_superadmin() -> None:
-    """Create configured superadmin only when none exists."""
+    """Create any configured superadmins that do not exist."""
     try:
-        telegram_id, created = asyncio.run(_bootstrap(Settings()))
+        results = asyncio.run(_bootstrap(Settings()))
     except Exception as exc:
         typer.echo(f"ERROR: {exc}", err=True)
         raise typer.Exit(1) from exc
-    typer.echo(f"Superadmin {telegram_id}: {'created' if created else 'already exists; unchanged'}")
+    for telegram_id, created in results:
+        typer.echo(
+            f"Superadmin {telegram_id}: {'created' if created else 'already exists; unchanged'}"
+        )
 
 
 @app.command("migrate-sqlite-to-postgres")

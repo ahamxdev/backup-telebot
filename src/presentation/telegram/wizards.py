@@ -402,7 +402,7 @@ class WizardMixin(LanguageHelpMixin):
                 if schedule_kind is None:
                     raise ValueError("invalid schedule")
                 item.data["schedule_kind"] = schedule_kind
-                if schedule_kind is ScheduleKind.MANUAL:
+                if schedule_kind in {ScheduleKind.MANUAL, ScheduleKind.ONCE}:
                     item.data["schedule"] = ScheduleConfig(schedule_kind)
                     await self._advance_to_archive(user, item, state)
                 else:

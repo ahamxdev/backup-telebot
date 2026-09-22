@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from config.settings import Settings
+from config.settings import Settings, parse_superadmin_telegram_ids
 from infrastructure.telegram.transport import proxy_from_settings
 from presentation.telegram.runtime.fsm import FSMStore, State
 from presentation.telegram.runtime.rate_limit import RateLimiter
@@ -34,6 +34,36 @@ def test_socks5_validation_and_auth() -> None:
 def test_production_requires_credentials() -> None:
     with pytest.raises(ValidationError):
         Settings(APP_ENV="production")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("123456789", (123456789,)),
+        ("123456789,987654321", (123456789, 987654321)),
+        ("123456789,987654321,123456789", (123456789, 987654321)),
+        (" 123456789 , 987654321 ", (123456789, 987654321)),
+    ],
+)
+def test_multiple_superadmin_ids_are_parsed_and_deduplicated(
+    raw: str, expected: tuple[int, ...]
+) -> None:
+    settings = Settings(APP_ENV="test", SUPERADMIN_TELEGRAM_IDS=raw)
+
+    assert parse_superadmin_telegram_ids(raw) == expected
+    assert settings.superadmin_telegram_ids() == expected
+
+
+@pytest.mark.parametrize("raw", ["", "123,,456", "abc", "123,-456", "0", "9223372036854775808"])
+def test_invalid_multiple_superadmin_ids_are_rejected(raw: str) -> None:
+    with pytest.raises(ValidationError, match="SUPERADMIN_TELEGRAM_IDS"):
+        Settings(APP_ENV="test", SUPERADMIN_TELEGRAM_IDS=raw)
+
+
+def test_legacy_single_superadmin_id_remains_supported() -> None:
+    settings = Settings(APP_ENV="test", TELEGRAM_SUPERADMIN_ID=123456789)
+
+    assert settings.superadmin_telegram_ids() == (123456789,)
 
 
 def test_production_requires_postgresql_control_database() -> None:

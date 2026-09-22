@@ -104,6 +104,52 @@ def test_schedule_timezone_and_all_kinds() -> None:
     monthly = profile("monthly", owner, ScheduleKind.MONTHLY)
     monthly.schedule_time, monthly.schedule_monthday = "10:30", 20
     assert next_scheduled_time(monthly, after, "Asia/Tehran") > after
+    once = profile("once", owner, ScheduleKind.ONCE)
+    assert next_scheduled_time(once, after, "Asia/Tehran") is None
+
+
+@pytest.mark.asyncio
+async def test_once_schedule_queues_exactly_one_run_and_keeps_manual_runs_available(
+    session,
+) -> None:
+    owner = User(telegram_user_id=41, display_name="root", role=Role.SUPERADMIN)
+    session.add(owner)
+    await session.flush()
+    due = datetime(2026, 9, 11, 5, tzinfo=UTC)
+    item = profile("one-shot", owner, ScheduleKind.ONCE)
+    item.next_scheduled_at = due
+    session.add(item)
+    await session.commit()
+
+    scheduler = Scheduler(session)
+    first = await scheduler.tick(due, "UTC")
+    assert len(first) == 1
+    assert item.next_scheduled_at is None
+
+    scheduled_run = await session.get(BackupRun, first[0].run_id)
+    assert scheduled_run is not None
+    scheduled_run.status = RunStatus.FAILED
+    scheduled_run.stage = RunStage.COMPLETE
+    await session.commit()
+
+    assert await scheduler.tick(due + timedelta(days=30), "UTC") == []
+    assert await session.get(BackupProfile, item.id) is item
+    service = BackupService(session)
+    await service.edit(owner, item.id, enabled=False)
+    await service.edit(owner, item.id, enabled=True)
+    assert item.next_scheduled_at is None
+    assert await scheduler.tick(due + timedelta(days=30), "UTC") == []
+
+    manual = await RunService(session).enqueue_manual(owner, item.id)
+    assert manual.created and manual.run.trigger is RunTrigger.MANUAL
+
+    manual.run.status = RunStatus.SUCCEEDED
+    manual.run.stage = RunStage.COMPLETE
+    item.schedule_kind = ScheduleKind.EVERY_N_HOURS
+    item.schedule_interval = 2
+    await session.commit()
+    assert await scheduler.tick(due + timedelta(days=31), "UTC") == []
+    assert item.next_scheduled_at == due + timedelta(days=31, hours=2)
 
 
 @pytest.mark.asyncio

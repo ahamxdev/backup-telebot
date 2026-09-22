@@ -48,6 +48,7 @@ TLS_ACTIONS = {
 }
 SCHEDULE_ACTIONS = {
     "schedule_manual": ScheduleKind.MANUAL,
+    "schedule_once": ScheduleKind.ONCE,
     "schedule_minutes": ScheduleKind.EVERY_N_MINUTES,
     "schedule_hours": ScheduleKind.EVERY_N_HOURS,
     "schedule_days": ScheduleKind.EVERY_N_DAYS,

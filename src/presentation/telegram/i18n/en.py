@@ -200,6 +200,7 @@ STRINGS: dict[str, str] = {
     "location_local": "Local",
     "location_remote": "Remote Server",
     "schedule_manual": "Manual Only",
+    "schedule_once": "Once",
     "schedule_minutes": "Every N Minutes",
     "schedule_hours": "Every N Hours",
     "schedule_days": "Every N Days",

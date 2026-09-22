@@ -213,6 +213,8 @@ class TelegramStateMixin:
 
     @staticmethod
     def _schedule_label(language: LanguageCode, schedule: ScheduleConfig) -> str:
+        if schedule.kind is ScheduleKind.ONCE:
+            return t(language, "schedule_once")
         if schedule.kind is ScheduleKind.EVERY_N_MINUTES:
             return t(language, "schedule_minutes_value", value=schedule.interval)
         if schedule.kind is ScheduleKind.EVERY_N_HOURS:

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from application.admin_service import AdminService
 from application.profile_config import validate_timezone
 from database.models import BackupProfile, SystemSettings, User
+from domain.enums import ScheduleKind
 from infrastructure.repositories import AuditRepository, SettingsRepository
 
 
@@ -18,7 +19,11 @@ class SettingsService:
         AdminService.require_superadmin(actor)
         settings = await self.get()
         settings.backup_timezone = validate_timezone(timezone.strip())
-        await self.session.execute(update(BackupProfile).values(next_scheduled_at=None))
+        await self.session.execute(
+            update(BackupProfile)
+            .where(BackupProfile.schedule_kind.not_in((ScheduleKind.MANUAL, ScheduleKind.ONCE)))
+            .values(next_scheduled_at=None)
+        )
         await AuditRepository(self.session).record(
             "backup_timezone_changed",
             actor_id=actor.id,

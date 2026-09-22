@@ -59,7 +59,7 @@ class BackupProfile(TimestampMixin, Base):
             name="ck_backup_profiles_schedule_monthday",
         ),
         CheckConstraint(
-            "schedule_kind IN ('MANUAL', 'EVERY_N_MINUTES', 'EVERY_N_HOURS', "
+            "schedule_kind IN ('MANUAL', 'ONCE', 'EVERY_N_MINUTES', 'EVERY_N_HOURS', "
             "'EVERY_N_DAYS', 'DAILY', 'WEEKLY', 'MONTHLY')",
             name="ck_backup_profiles_schedule_kind",
         ),
@@ -80,7 +80,7 @@ class BackupProfile(TimestampMixin, Base):
             name="ck_backup_profiles_schedule_time",
         ),
         CheckConstraint(
-            "(schedule_kind = 'MANUAL' AND schedule_interval IS NULL AND "
+            "(schedule_kind IN ('MANUAL', 'ONCE') AND schedule_interval IS NULL AND "
             "schedule_time IS NULL AND schedule_weekday IS NULL AND schedule_monthday IS NULL) OR "
             "(schedule_kind IN ('EVERY_N_MINUTES', 'EVERY_N_HOURS', 'EVERY_N_DAYS') AND "
             "schedule_interval IS NOT NULL AND schedule_time IS NULL AND "

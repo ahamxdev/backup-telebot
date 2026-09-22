@@ -36,8 +36,9 @@ async def run_bot(settings: Settings) -> None:
     if key is None:
         raise ValueError("bot requires MASTER_ENCRYPTION_KEY_B64")
     SecretCipher(key.get_secret_value())
-    if settings.TELEGRAM_SUPERADMIN_ID is None:
-        raise ValueError("TELEGRAM_SUPERADMIN_ID is required")
+    superadmin_ids = settings.superadmin_telegram_ids()
+    if not superadmin_ids:
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS or TELEGRAM_SUPERADMIN_ID is required")
     settings.DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     secure_session_path(settings.TELEGRAM_SESSION_PATH)
     database = Database(settings.DATABASE_URL)
@@ -45,9 +46,11 @@ async def run_bot(settings: Settings) -> None:
         async with database.session_factory() as session:
             await validate_runtime_schema(session)
             await snapshot_legacy_active_runs(session)
-            await BootstrapService(session).bootstrap_superadmin(
-                settings.TELEGRAM_SUPERADMIN_ID, settings.TELEGRAM_SUPERADMIN_LANGUAGE
-            )
+            bootstrap = BootstrapService(session)
+            for telegram_id in superadmin_ids:
+                await bootstrap.bootstrap_superadmin(
+                    telegram_id, settings.TELEGRAM_SUPERADMIN_LANGUAGE
+                )
             await AuditRepository(session).record(
                 "application_startup",
                 details={"proxy_enabled": settings.TELEGRAM_PROXY_ENABLED, "mode": "MTProto bot"},

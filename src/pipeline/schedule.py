@@ -18,7 +18,7 @@ class SchedulerResult:
 
 
 def next_scheduled_time(profile: BackupProfile, after: datetime, timezone: str) -> datetime | None:
-    if profile.schedule_kind is ScheduleKind.MANUAL:
+    if profile.schedule_kind in {ScheduleKind.MANUAL, ScheduleKind.ONCE}:
         return None
     after_utc = _as_utc(after)
     if profile.schedule_kind in {
@@ -88,6 +88,8 @@ class Scheduler:
         service = RunService(self.session)
         for profile in profiles:
             if profile.next_scheduled_at is None:
+                if profile.schedule_kind is ScheduleKind.ONCE:
+                    continue
                 profile.next_scheduled_at = next_scheduled_time(profile, now, timezone)
                 continue
             due = _as_utc(profile.next_scheduled_at)
@@ -95,6 +97,10 @@ class Scheduler:
                 queued = await service.enqueue_scheduled(profile.id, due)
                 results.append(SchedulerResult(queued.run.id, queued.run.status.value))
                 cursor = max(due, _as_utc(now))
-                profile.next_scheduled_at = next_scheduled_time(profile, cursor, timezone)
+                profile.next_scheduled_at = (
+                    None
+                    if profile.schedule_kind is ScheduleKind.ONCE
+                    else next_scheduled_time(profile, cursor, timezone)
+                )
         await self.session.commit()
         return results

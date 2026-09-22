@@ -46,6 +46,7 @@ class SSHAuthenticationMethod(StrEnum):
 
 class ScheduleKind(StrEnum):
     MANUAL = "MANUAL"
+    ONCE = "ONCE"
     EVERY_N_MINUTES = "EVERY_N_MINUTES"
     EVERY_N_HOURS = "EVERY_N_HOURS"
     EVERY_N_DAYS = "EVERY_N_DAYS"

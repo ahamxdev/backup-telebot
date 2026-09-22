@@ -7,12 +7,22 @@ from infrastructure.repositories import AccessRepository, ConflictError
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_is_idempotent_and_never_replaces(session: AsyncSession) -> None:
+async def test_bootstrap_is_idempotent_and_supports_multiple_superadmins(
+    session: AsyncSession,
+) -> None:
     service = BootstrapService(session)
     first, created = await service.bootstrap_superadmin(1001)
     assert created and first.role is Role.SUPERADMIN
     second, created = await service.bootstrap_superadmin(9999)
-    assert not created and second.telegram_user_id == 1001
+    assert created and second.role is Role.SUPERADMIN
+    assert second.telegram_user_id == 9999
+    existing, created = await service.bootstrap_superadmin(1001)
+    assert not created and existing.id == first.id
+
+    profile = await BackupService(session).create_draft(
+        second, "second-superadmin-profile", None, SourceType.FILESYSTEM
+    )
+    assert profile.created_by == second.id
 
 
 @pytest.mark.asyncio
@@ -24,6 +34,22 @@ async def test_duplicate_and_invalid_ids(session: AsyncSession) -> None:
         await service.create_admin(admin, 2002, "other", set())
     with pytest.raises(ValueError):
         await service.create_admin(admin, 0, "bad", set())
+
+
+@pytest.mark.asyncio
+async def test_configured_id_promotes_and_reenables_an_existing_admin(
+    session: AsyncSession,
+) -> None:
+    first, _ = await BootstrapService(session).bootstrap_superadmin(1001)
+    existing = await AdminService(session).create_admin(first, 2002, "admin", set())
+    existing.enabled = False
+    await session.commit()
+
+    promoted, created = await BootstrapService(session).bootstrap_superadmin(2002)
+
+    assert not created
+    assert promoted.role is Role.SUPERADMIN
+    assert promoted.enabled
 
 
 @pytest.mark.asyncio

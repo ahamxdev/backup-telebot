@@ -29,8 +29,8 @@ from domain.enums import (
 )
 from pipeline import jobs as jobs_module
 from pipeline.delivery import DeliveryService
+from pipeline.finalize import finalize_artifact
 from pipeline.jobs import RunService
-from pipeline.transforms import sha256_file
 
 
 class FakeTransport:
@@ -67,6 +67,30 @@ class CancelAfterFirstSendTransport(FakeTransport):
         return message
 
 
+class FailOnePartOnceTransport(FakeTransport):
+    def __init__(self, entity: int, part_suffix: str) -> None:
+        super().__init__()
+        self.entity = entity
+        self.part_suffix = part_suffix
+        self.files: list[tuple[int, object]] = []
+        self.failed = False
+
+    async def send_file(self, entity: int, file: object, **kwargs: object) -> object:
+        self.files.append((entity, file))
+        self.sent.append(entity)
+        self.kwargs.append(kwargs)
+        if (
+            not self.failed
+            and entity == self.entity
+            and isinstance(file, str)
+            and file.endswith(self.part_suffix)
+        ):
+            self.failed = True
+            raise OSError("offline for one part")
+        media = SimpleNamespace(document=SimpleNamespace(id=100 + entity))
+        return SimpleNamespace(id=200 + entity, media=media)
+
+
 class Clock:
     def __init__(self) -> None:
         self.value = datetime(2026, 9, 12, 10, tzinfo=UTC)
@@ -100,7 +124,13 @@ def test_exponential_backoff_and_jitter_are_bounded(session, settings) -> None:
     assert service._retry_delay(50) == 60
 
 
-async def _pending_run(session, root: Path) -> tuple[BackupRun, list[User], Path]:
+async def _pending_run(
+    session,
+    root: Path,
+    *,
+    payload: bytes = b"payload",
+    max_file_bytes: int = 2_000_000_000,
+) -> tuple[BackupRun, list[User], Path]:
     owner = User(telegram_user_id=10, display_name="root", role=Role.SUPERADMIN)
     admins = [
         User(telegram_user_id=11, display_name="a", role=Role.ADMIN),
@@ -125,20 +155,30 @@ async def _pending_run(session, root: Path) -> tuple[BackupRun, list[User], Path
         for admin in admins
     )
     run_uuid = "00000000-0000-4000-8000-0000deadbeef"
-    directory = root / "delivery" / "stamp_00000000"
-    directory.mkdir(parents=True)
-    artifact = directory / "delivery.tar"
-    artifact.write_bytes(b"payload")
+    source = root.parent / "delivery-source.tar"
+    source.write_bytes(payload)
+    finalized = finalize_artifact(
+        source,
+        root,
+        profile.name,
+        run_uuid,
+        datetime(2026, 9, 12, 10, tzinfo=UTC),
+        "UTC",
+        "delivery.tar",
+        {},
+        max_file_bytes=max_file_bytes,
+    )
+    artifact = finalized.artifact
     run = BackupRun(
         uuid=run_uuid,
         profile_id=profile.id,
         trigger=RunTrigger.MANUAL,
         status=RunStatus.DELIVERY_PENDING,
         stage=RunStage.PENDING_DELIVERY,
-        pending_directory=str(directory),
+        pending_directory=str(finalized.directory),
         final_filename=artifact.name,
-        final_size_bytes=artifact.stat().st_size,
-        final_sha256=sha256_file(artifact),
+        final_size_bytes=finalized.size,
+        final_sha256=finalized.checksum,
     )
     session.add(run)
     await session.commit()
@@ -149,6 +189,12 @@ async def test_superadmin_is_unconditional_and_profile_admins_are_filtered(
     session, settings
 ) -> None:
     run, admins, _artifact = await _pending_run(session, settings.PENDING_DELIVERY_ROOT)
+    second_superadmin = User(
+        telegram_user_id=13,
+        display_name="second root",
+        role=Role.SUPERADMIN,
+    )
+    session.add(second_superadmin)
     await session.execute(
         delete(AdminBackupAccess).where(AdminBackupAccess.admin_id == admins[1].id)
     )
@@ -157,7 +203,7 @@ async def test_superadmin_is_unconditional_and_profile_admins_are_filtered(
 
     assert await delivery_service(session, transport, settings, Clock()).attempt(run)
 
-    assert transport.sent == [10, admins[0].telegram_user_id]
+    assert transport.sent == [10, admins[0].telegram_user_id, second_superadmin.telegram_user_id]
     deliveries = list(
         await session.scalars(
             select(BackupDelivery)
@@ -168,6 +214,7 @@ async def test_superadmin_is_unconditional_and_profile_admins_are_filtered(
     assert [(item.admin_id, item.status) for item in deliveries] == [
         (1, DeliveryStatus.SUCCEEDED),
         (admins[0].id, DeliveryStatus.SUCCEEDED),
+        (second_superadmin.id, DeliveryStatus.SUCCEEDED),
     ]
 
 
@@ -231,6 +278,45 @@ async def test_transient_retry_is_durable_and_does_not_resend_success(
     assert run.status is RunStatus.SUCCEEDED
     await session.refresh(deliveries[0])
     assert deliveries[0].attempts == 1
+
+
+async def test_multipart_retry_resumes_at_only_failed_part(session, settings) -> None:
+    run, _admins, _artifact = await _pending_run(
+        session,
+        settings.PENDING_DELIVERY_ROOT,
+        payload=b"0123456789",
+        max_file_bytes=4,
+    )
+    clock = Clock()
+    first = FailOnePartOnceTransport(10, ".part002")
+
+    assert not await delivery_service(session, first, settings, clock).attempt(run)
+    owner_delivery = await session.scalar(
+        select(BackupDelivery).where(
+            BackupDelivery.run_id == run.id,
+            BackupDelivery.admin_id == 1,
+        )
+    )
+    assert owner_delivery is not None
+    assert owner_delivery.next_part == 2
+    assert owner_delivery.part_attempts == 1
+    owner_files = [Path(file).name for entity, file in first.files if entity == 10]
+    assert owner_files == ["delivery.tar.part001", "delivery.tar.part002"]
+    owner_captions = [
+        str(kwargs["caption"])
+        for (entity, _file), kwargs in zip(first.files, first.kwargs, strict=True)
+        if entity == 10
+    ]
+    assert "Part 1/3" in owner_captions[0]
+    assert "Part 2/3" in owner_captions[1]
+
+    clock.advance(35)
+    second = FakeTransport()
+    assert await delivery_service(session, second, settings, clock).attempt(run)
+    assert second.sent == [10, 10]
+    assert "Part 2/3" in str(second.kwargs[0]["caption"])
+    assert "Part 3/3" in str(second.kwargs[1]["caption"])
+    assert run.status is RunStatus.SUCCEEDED
 
 
 async def test_delivery_uses_scheduler_advanced_next_run_not_snapshot(session, settings) -> None:

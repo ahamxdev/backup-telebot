@@ -131,6 +131,24 @@ async def test_profile_edit_preserves_disabled_state(session: AsyncSession) -> N
 
 
 @pytest.mark.asyncio
+async def test_once_profile_creation_is_scheduled_immediately(session: AsyncSession) -> None:
+    actor, _ = await BootstrapService(session).bootstrap_superadmin(1001)
+    profile = await BackupService(session).create_files_profile(
+        actor,
+        name="one-time-files",
+        description=None,
+        files=FilesConfig(SourceLocation.LOCAL, ("/srv/backups",)),
+        schedule=ScheduleConfig(ScheduleKind.ONCE),
+        compression=CompressionConfig(CompressionFormat.NONE, None),
+        encryption=EncryptionConfig(EncryptionMode.NONE),
+        admin_ids=set(),
+    )
+
+    assert profile.schedule_kind is ScheduleKind.ONCE
+    assert profile.next_scheduled_at is not None
+
+
+@pytest.mark.asyncio
 async def test_local_profile_persists_canonical_host_path_from_legacy_mount_path(
     session: AsyncSession,
 ) -> None:

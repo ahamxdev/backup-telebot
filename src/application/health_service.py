@@ -8,7 +8,7 @@ from pathlib import Path
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -238,6 +238,13 @@ async def collect_operational_health(
                 BackupProfile.enabled.is_(True),
                 BackupProfile.archived_at.is_(None),
                 BackupProfile.schedule_kind != ScheduleKind.MANUAL,
+                or_(
+                    BackupProfile.schedule_kind != ScheduleKind.ONCE,
+                    and_(
+                        BackupProfile.schedule_kind == ScheduleKind.ONCE,
+                        BackupProfile.next_scheduled_at.is_not(None),
+                    ),
+                ),
             )
         )
         or 0

@@ -68,6 +68,16 @@ atomically finalized under `/data/pending-delivery/<profile>/<local-time>_<id>/`
 removed only after all currently authorized recipients are delivered or resolved as revoked.
 Successful history and checksums remain in the control database; successful archive bytes do not.
 
+`TELEGRAM_MAX_FILE_BYTES` defaults to 2,000,000,000 bytes. Artifacts at or below that limit use
+the existing single-file delivery path unchanged. A larger artifact is split only after archive,
+compression, and optional encryption have produced the final file. Parts are named
+`<final-name>.part001`, `.part002`, and so on. The manifest records the original final-file
+SHA-256 plus every part's size and SHA-256; recovery verifies the ordered parts reassemble to the
+original checksum. Delivery progress is durable per recipient and part, so a transient failure
+resumes with the failed part and the run succeeds only after every authorized recipient has every
+part. Reassemble downloaded parts in filename order, for example with
+`cat backup.tar.zst.part* > backup.tar.zst`, before decrypting or extracting the final artifact.
+
 PostgreSQL uses an uncompressed custom-format `pg_dump` selected from
 `/usr/lib/postgresql/<server-major>/bin` and verifies with matching `pg_restore`. MySQL and
 MariaDB use a protected option file and a full single-database logical dump. MSSQL uses TDS
@@ -248,6 +258,14 @@ project's existing `.runtime` directory at `/data/runtime` only for work files, 
 deliveries, and Telegram sessions. Application services wait for PostgreSQL health and the
 successful Alembic migration before starting. Run administrative commands with the same
 backend using `docker compose --profile tools run --rm cli <backupctl arguments>`.
+
+On Linux, the worker maps `host.docker.internal` through Docker's `host-gateway`. Use that host
+name in PostgreSQL, MySQL/MariaDB, or MSSQL backup profiles when the database runs on the Docker
+host; remote database host names continue to work as before. No database port is published by
+this Compose project and host networking is not used. The host database must listen on an
+interface reachable from the Docker bridge (not only `127.0.0.1`) and its database authentication
+and host firewall should allow only the required Docker bridge/network CIDR and backup account.
+Do not broadly expose the database port on public interfaces.
 
 To move an existing SQLite production database, first start PostgreSQL and migrate its empty
 schema, stop bot and worker to freeze writes, then run the guarded transfer:

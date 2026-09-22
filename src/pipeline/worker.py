@@ -483,6 +483,7 @@ class PipelineRunner:
                 filename,
                 source.metadata,
                 finalize_stop.check,
+                self.settings.telegram_max_file_bytes(),
             ),
             finalize_stop,
         )
@@ -542,7 +543,7 @@ class PipelineRunner:
             self.transport,  # type: ignore[arg-type]
             self.settings.PENDING_DELIVERY_ROOT,
             self.settings.UPLOAD_PROGRESS_INTERVAL_SECONDS,
-            self.settings.TELEGRAM_MAX_UPLOAD_BYTES,
+            self.settings.telegram_max_file_bytes(),
             self.settings.TELEGRAM_UPLOAD_TIMEOUT_SECONDS,
             self.settings.TELEGRAM_MAX_DELIVERY_ATTEMPTS,
             self.settings.TELEGRAM_RETRY_BASE_SECONDS,

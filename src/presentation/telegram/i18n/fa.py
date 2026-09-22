@@ -193,6 +193,7 @@ STRINGS: dict[str, str] = {
     "location_local": "محلی",
     "location_remote": "سرور ریموت",
     "schedule_manual": "فقط دستی",
+    "schedule_once": "یک‌بار",
     "schedule_minutes": "هر N دقیقه",
     "schedule_hours": "هر N ساعت",
     "schedule_days": "هر N روز",

@@ -296,9 +296,11 @@ class BackupService:
         if enabled is not None:
             was_enabled = profile.enabled
             profile.enabled = enabled
-            if not enabled or profile.schedule_kind is ScheduleKind.MANUAL:
+            if profile.schedule_kind is ScheduleKind.MANUAL or (
+                not enabled and profile.schedule_kind is not ScheduleKind.ONCE
+            ):
                 profile.next_scheduled_at = None
-            elif not was_enabled:
+            elif not was_enabled and profile.schedule_kind is not ScheduleKind.ONCE:
                 profile.next_scheduled_at = utc_now()
         await self.audit.record(
             "backup_edited", actor_id=actor.id, target_type="backup", target_id=str(profile.id)
@@ -393,18 +395,24 @@ class BackupService:
         profile.name = clean_name
         profile.description = clean_description
         profile.source_type = source_type
-        was_enabled = profile.enabled
+        old_schedule_kind = profile.schedule_kind
+        old_next_scheduled_at = profile.next_scheduled_at
         profile.enabled = enabled
         profile.schedule_kind = schedule.kind
         profile.schedule_interval = schedule.interval
         profile.schedule_time = schedule.time
         profile.schedule_weekday = schedule.weekday
         profile.schedule_monthday = schedule.monthday
-        profile.next_scheduled_at = (
-            utc_now()
-            if enabled and not was_enabled and schedule.kind is not ScheduleKind.MANUAL
-            else None
-        )
+        if schedule.kind is ScheduleKind.MANUAL:
+            profile.next_scheduled_at = None
+        elif schedule.kind is ScheduleKind.ONCE:
+            profile.next_scheduled_at = (
+                old_next_scheduled_at if old_schedule_kind is ScheduleKind.ONCE else utc_now()
+            )
+        elif not enabled:
+            profile.next_scheduled_at = None
+        else:
+            profile.next_scheduled_at = None
         profile.compression_format = compression.format
         profile.archive_format = compression.archive_format
         profile.compression_algorithm = compression.algorithm

@@ -23,7 +23,7 @@ class HealthSettingsMixin(RunActionsMixin):
                 proxy=t(
                     language, "enabled" if self.settings.TELEGRAM_PROXY_ENABLED else "disabled"
                 ),
-                limit=self.settings.TELEGRAM_MAX_UPLOAD_BYTES,
+                limit=self.settings.telegram_max_file_bytes(),
                 timezone=stored.backup_timezone,
             ),
             buttons=settings_menu(language),

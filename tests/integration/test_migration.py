@@ -48,7 +48,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         delivery_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(backup_deliveries)")
         }
-        assert "next_attempt_at" in delivery_columns
+        assert {"next_attempt_at", "next_part", "part_attempts"} <= delivery_columns
         delivery_indexes = {
             row[1] for row in connection.execute("PRAGMA index_list(backup_deliveries)")
         }
@@ -61,7 +61,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         } <= run_columns
         run_indexes = {row[1] for row in connection.execute("PRAGMA index_list(backup_runs)")}
         assert "ix_backup_runs_failed_artifact_cleanup_at" in run_indexes
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0013",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0015",)
         profile_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(backup_profiles)")
         }
@@ -117,7 +117,7 @@ def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Pa
         assert connection.execute("SELECT event_type FROM audit_events").fetchone() == (
             "preserved",
         )
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0013",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0015",)
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_heartbeats'"
         ).fetchone() == ("runtime_heartbeats",)

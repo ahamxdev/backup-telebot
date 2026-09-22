@@ -35,6 +35,8 @@ class BackupDelivery(TimestampMixin, Base):
             name="ck_backup_deliveries_status",
         ),
         CheckConstraint("attempts >= 0", name="ck_backup_deliveries_attempts"),
+        CheckConstraint("part_attempts >= 0", name="ck_backup_deliveries_part_attempts"),
+        CheckConstraint("next_part >= 1", name="ck_backup_deliveries_next_part"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -46,6 +48,8 @@ class BackupDelivery(TimestampMixin, Base):
         Enum(DeliveryStatus, native_enum=False), default=DeliveryStatus.PENDING, index=True
     )
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    part_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_part: Mapped[int] = mapped_column(Integer, default=1)
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     telegram_file_id: Mapped[str | None] = mapped_column(String(128))
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)

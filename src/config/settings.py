@@ -7,6 +7,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from domain.enums import LanguageCode
 
+_MAX_TELEGRAM_ID = 9_223_372_036_854_775_807
+
+
+def parse_superadmin_telegram_ids(value: str) -> tuple[int, ...]:
+    """Parse a comma-separated, ordered set of positive Telegram user IDs."""
+    parts = [item.strip() for item in value.split(",")]
+    if not parts or any(not item or not item.isascii() or not item.isdecimal() for item in parts):
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS must contain comma-separated numeric IDs")
+    ids = tuple(dict.fromkeys(int(item) for item in parts))
+    if any(item <= 0 or item > _MAX_TELEGRAM_ID for item in ids):
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS must contain positive 64-bit integers")
+    return ids
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=True)
@@ -17,6 +30,7 @@ class Settings(BaseSettings):
     TELEGRAM_API_ID: int | None = None
     TELEGRAM_API_HASH: SecretStr | None = None
     TELEGRAM_BOT_TOKEN: SecretStr | None = None
+    SUPERADMIN_TELEGRAM_IDS: str | None = None
     TELEGRAM_SUPERADMIN_ID: int | None = None
     TELEGRAM_SUPERADMIN_LANGUAGE: LanguageCode = LanguageCode.ENGLISH
     TELEGRAM_SESSION_PATH: Path = Path(".runtime/telegram/telegram.session")
@@ -26,7 +40,8 @@ class Settings(BaseSettings):
     TELEGRAM_PROXY_PORT: int | None = Field(default=None, ge=1, le=65535)
     TELEGRAM_PROXY_USERNAME: str | None = None
     TELEGRAM_PROXY_PASSWORD: SecretStr | None = None
-    TELEGRAM_MAX_UPLOAD_BYTES: int = Field(default=2_000_000_000, gt=0, le=2_000_000_000)
+    TELEGRAM_MAX_FILE_BYTES: int = Field(default=2_000_000_000, gt=0, le=2_000_000_000)
+    TELEGRAM_MAX_UPLOAD_BYTES: int | None = Field(default=None, gt=0, le=2_000_000_000)
     TELEGRAM_UPLOAD_TIMEOUT_SECONDS: int = Field(default=7200, gt=0)
     TELEGRAM_MAX_DELIVERY_ATTEMPTS: int = Field(default=10, ge=1, le=100)
     TELEGRAM_RETRY_BASE_SECONDS: int = Field(default=30, ge=1, le=86400)
@@ -90,10 +105,34 @@ class Settings(BaseSettings):
             mappings.append((host, container))
         return tuple(mappings)
 
+    def superadmin_telegram_ids(self) -> tuple[int, ...]:
+        """Return the new multi-ID setting, falling back to the legacy single ID."""
+        if self.SUPERADMIN_TELEGRAM_IDS is not None:
+            return parse_superadmin_telegram_ids(self.SUPERADMIN_TELEGRAM_IDS)
+        if self.TELEGRAM_SUPERADMIN_ID is not None:
+            return (self.TELEGRAM_SUPERADMIN_ID,)
+        return ()
+
+    def telegram_max_file_bytes(self) -> int:
+        """Return the part limit, honoring the legacy setting when it alone is configured."""
+        if (
+            "TELEGRAM_MAX_FILE_BYTES" not in self.model_fields_set
+            and self.TELEGRAM_MAX_UPLOAD_BYTES is not None
+        ):
+            return self.TELEGRAM_MAX_UPLOAD_BYTES
+        return self.TELEGRAM_MAX_FILE_BYTES
+
+    @field_validator("SUPERADMIN_TELEGRAM_IDS")
+    @classmethod
+    def valid_superadmin_telegram_ids(cls, value: str | None) -> str | None:
+        if value is not None:
+            parse_superadmin_telegram_ids(value)
+        return value
+
     @field_validator("TELEGRAM_SUPERADMIN_ID")
     @classmethod
     def valid_telegram_id(cls, value: int | None) -> int | None:
-        if value is not None and (value <= 0 or value > 9_223_372_036_854_775_807):
+        if value is not None and (value <= 0 or value > _MAX_TELEGRAM_ID):
             raise ValueError("TELEGRAM_SUPERADMIN_ID must be a positive 64-bit integer")
         return value
 
@@ -122,14 +161,9 @@ class Settings(BaseSettings):
         if self.HEALTH_TELEGRAM_STALE_SECONDS <= self.HEALTH_HEARTBEAT_INTERVAL_SECONDS:
             raise ValueError("Telegram stale threshold must exceed the heartbeat interval")
         if self.APP_ENV == "production":
-            required = (
-                self.TELEGRAM_API_ID,
-                self.TELEGRAM_API_HASH,
-                self.TELEGRAM_BOT_TOKEN,
-                self.TELEGRAM_SUPERADMIN_ID,
-            )
-            if any(item is None for item in required):
-                raise ValueError("production requires all Telegram credentials and superadmin ID")
+            credentials = (self.TELEGRAM_API_ID, self.TELEGRAM_API_HASH, self.TELEGRAM_BOT_TOKEN)
+            if any(item is None for item in credentials) or not self.superadmin_telegram_ids():
+                raise ValueError("production requires Telegram credentials and superadmin IDs")
             if self.MASTER_ENCRYPTION_KEY_B64 is None:
                 raise ValueError("production requires MASTER_ENCRYPTION_KEY_B64")
         return self

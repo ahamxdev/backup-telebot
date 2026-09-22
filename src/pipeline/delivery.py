@@ -29,7 +29,7 @@ from database.models import (
 from domain.enums import DeliveryStatus, Role, RunStage, RunStatus, ScheduleKind, SourceLocation
 from infrastructure.repositories import AccessRepository
 from pipeline.errors import PipelineError
-from pipeline.finalize import verify_pending
+from pipeline.finalize import delivery_artifacts
 from pipeline.workspace import remove_owned_directory
 from presentation.telegram.datetime_format import format_user_timestamp, timezone_label
 from presentation.telegram.formatting import TelegramHtml, code, escaped
@@ -53,6 +53,7 @@ _RANDOM = secrets.SystemRandom()
 def _schedule_caption(profile: BackupProfile) -> str:
     labels = {
         ScheduleKind.MANUAL: "Manual only",
+        ScheduleKind.ONCE: "Once",
         ScheduleKind.EVERY_N_MINUTES: f"Every {profile.schedule_interval} minutes",
         ScheduleKind.EVERY_N_HOURS: f"Every {profile.schedule_interval} hours",
         ScheduleKind.EVERY_N_DAYS: f"Every {profile.schedule_interval} days",
@@ -232,7 +233,7 @@ class DeliveryService:
             or not run.final_sha256
         ):
             raise ValueError("run has no finalized artifact")
-        path = Path(run.pending_directory) / run.final_filename
+        pending_directory = Path(run.pending_directory)
         if run.configuration_snapshot is not None:
             profile = restore_run_config(run.configuration_snapshot)
         else:
@@ -253,10 +254,16 @@ class DeliveryService:
                 raise ValueError("run profile is unavailable")
             profile = live_profile
         await self._refresh_next_scheduled_at(profile, self.now())
-        await asyncio.to_thread(verify_pending, path, run.final_size_bytes, run.final_sha256)
-        if run.final_size_bytes > self.max_bytes:
+        artifacts = await asyncio.to_thread(
+            delivery_artifacts,
+            pending_directory,
+            run.final_filename,
+            run.final_size_bytes,
+            run.final_sha256,
+        )
+        if any(artifact.size > self.max_bytes for artifact in artifacts):
             raise PipelineError(
-                "UPLOAD_LIMIT", "artifact exceeds the configured Telegram upload limit"
+                "UPLOAD_LIMIT", "artifact part exceeds the configured Telegram upload limit"
             )
         live_assigned_ids = set(
             await self.session.scalars(
@@ -284,6 +291,7 @@ class DeliveryService:
             await self.session.scalars(
                 select(User).where(
                     User.role == Role.SUPERADMIN,
+                    User.enabled.is_(True),
                     User.deleted_at.is_(None),
                 )
             )
@@ -339,7 +347,8 @@ class DeliveryService:
         )
         await self._cancel_boundary(run)
         run.stage = RunStage.TELEGRAM_DELIVERY
-        reusable_media: Any | None = None
+        reusable_media: dict[int, Any] = {}
+        multipart = len(artifacts) > 1
         for admin_id in sorted(selected_ids):
             await self._cancel_boundary(run)
             delivery = deliveries[admin_id]
@@ -348,7 +357,7 @@ class DeliveryService:
             current_time = self.now()
             if not self._is_due(delivery, current_time):
                 continue
-            if delivery.attempts >= self.max_attempts:
+            if delivery.part_attempts >= self.max_attempts:
                 delivery.status = DeliveryStatus.FAILED
                 delivery.next_attempt_at = None
                 delivery.last_error = "PERMANENT:MAX_ATTEMPTS"
@@ -369,17 +378,14 @@ class DeliveryService:
                     retry_pending=False,
                 )
                 continue
-            last_report = 0.0
-
-            def progress(_sent: int, _total: int) -> None:
-                nonlocal last_report
-                monotonic_now = time.monotonic()
-                if monotonic_now - last_report >= self.progress_interval:
-                    last_report = monotonic_now
-
             user = await self.session.get(User, admin_id)
             authorized = None
-            if user is not None and user.role is Role.SUPERADMIN and user.deleted_at is None:
+            if (
+                user is not None
+                and user.role is Role.SUPERADMIN
+                and user.enabled
+                and user.deleted_at is None
+            ):
                 authorized = user
             elif user is not None and user.role is Role.ADMIN:
                 authorized = await AccessRepository(self.session).authorized_recipient(
@@ -401,44 +407,25 @@ class DeliveryService:
                 )
                 continue
 
-            delivery.attempts += 1
-            delivery.next_attempt_at = current_time + timedelta(
-                seconds=self._retry_delay(delivery.attempts)
-            )
-            await self.session.commit()
-            log.info(
-                "telegram_delivery_attempt_started",
-                run_id=run.id,
-                profile_id=run.profile_id,
-                delivery_id=delivery.id,
-                admin_id=admin_id,
-                telegram_id=authorized.telegram_user_id,
-                status=delivery.status.value,
-                attempt=delivery.attempts,
-            )
-            try:
-                async with asyncio.timeout(self.upload_timeout):
-                    message = await self.transport.send_file(
-                        authorized.telegram_user_id,
-                        reusable_media or str(path),
-                        force_document=True,
-                        progress_callback=progress,
-                        caption=build_backup_caption(run, profile, self.now(), self.timezone),
-                        parse_mode="html",
-                    )
-            except Exception as exc:
-                kind, flood_wait = classify_delivery_error(exc)
-                delivery.last_error = f"{kind.value}:{type(exc).__name__}"
-                if kind is DeliveryErrorKind.PERMANENT or delivery.attempts >= self.max_attempts:
-                    delivery.status = DeliveryStatus.FAILED
-                    delivery.next_attempt_at = None
-                else:
-                    delivery.next_attempt_at = self.now() + timedelta(
-                        seconds=self._retry_delay(delivery.attempts, flood_wait)
-                    )
+            for artifact in artifacts[delivery.next_part - 1 :]:
+                await self._cancel_boundary(run)
+                last_report = 0.0
+
+                def progress(_sent: int, _total: int) -> None:
+                    nonlocal last_report
+                    monotonic_now = time.monotonic()
+                    if monotonic_now - last_report >= self.progress_interval:
+                        last_report = monotonic_now
+
+                current_time = self.now()
+                delivery.attempts += 1
+                delivery.part_attempts += 1
+                delivery.next_attempt_at = current_time + timedelta(
+                    seconds=self._retry_delay(delivery.part_attempts)
+                )
                 await self.session.commit()
-                log.warning(
-                    "telegram_delivery_attempt_failed",
+                log.info(
+                    "telegram_delivery_attempt_started",
                     run_id=run.id,
                     profile_id=run.profile_id,
                     delivery_id=delivery.id,
@@ -446,39 +433,91 @@ class DeliveryService:
                     telegram_id=authorized.telegram_user_id,
                     status=delivery.status.value,
                     attempt=delivery.attempts,
-                    error_kind=kind.value,
-                    exception_class=type(exc).__name__,
-                    telegram_response_error=" ".join(str(exc).split())[:2000],
-                    next_retry_time=(
-                        delivery.next_attempt_at.isoformat()
-                        if delivery.next_attempt_at is not None
-                        else None
-                    ),
-                    retry_pending=delivery.status is DeliveryStatus.PENDING,
+                    part=artifact.number,
+                    total_parts=len(artifacts),
                 )
-                continue
+                caption = build_backup_caption(run, profile, self.now(), self.timezone)
+                if multipart:
+                    caption = TelegramHtml(
+                        f"{caption}\n📄 <b>Part {artifact.number}/{len(artifacts)}</b>"
+                    )
+                try:
+                    async with asyncio.timeout(self.upload_timeout):
+                        message = await self.transport.send_file(
+                            authorized.telegram_user_id,
+                            reusable_media.get(artifact.number) or str(artifact.path),
+                            force_document=True,
+                            progress_callback=progress,
+                            caption=caption,
+                            parse_mode="html",
+                        )
+                except Exception as exc:
+                    kind, flood_wait = classify_delivery_error(exc)
+                    delivery.last_error = f"{kind.value}:{type(exc).__name__}"
+                    if (
+                        kind is DeliveryErrorKind.PERMANENT
+                        or delivery.part_attempts >= self.max_attempts
+                    ):
+                        delivery.status = DeliveryStatus.FAILED
+                        delivery.next_attempt_at = None
+                    else:
+                        delivery.next_attempt_at = self.now() + timedelta(
+                            seconds=self._retry_delay(delivery.part_attempts, flood_wait)
+                        )
+                    await self.session.commit()
+                    log.warning(
+                        "telegram_delivery_attempt_failed",
+                        run_id=run.id,
+                        profile_id=run.profile_id,
+                        delivery_id=delivery.id,
+                        admin_id=admin_id,
+                        telegram_id=authorized.telegram_user_id,
+                        status=delivery.status.value,
+                        attempt=delivery.attempts,
+                        part=artifact.number,
+                        total_parts=len(artifacts),
+                        error_kind=kind.value,
+                        exception_class=type(exc).__name__,
+                        telegram_response_error=" ".join(str(exc).split())[:2000],
+                        next_retry_time=(
+                            delivery.next_attempt_at.isoformat()
+                            if delivery.next_attempt_at is not None
+                            else None
+                        ),
+                        retry_pending=delivery.status is DeliveryStatus.PENDING,
+                    )
+                    break
 
-            delivery.status = DeliveryStatus.SUCCEEDED
-            delivery.next_attempt_at = None
-            delivery.delivered_at = self.now()
-            delivery.telegram_message_id = getattr(message, "id", None)
-            document = getattr(getattr(message, "media", None), "document", None)
-            reusable_media = getattr(message, "media", None) or reusable_media
-            file_id = getattr(document, "id", None)
-            delivery.telegram_file_id = str(file_id) if file_id is not None else None
-            delivery.last_error = None
-            await self.session.commit()
-            log.info(
-                "telegram_delivery_attempt_succeeded",
-                run_id=run.id,
-                profile_id=run.profile_id,
-                delivery_id=delivery.id,
-                admin_id=admin_id,
-                telegram_id=authorized.telegram_user_id,
-                status=delivery.status.value,
-                attempt=delivery.attempts,
-                telegram_message_id=delivery.telegram_message_id,
-            )
+                delivery.next_part = artifact.number + 1
+                delivery.part_attempts = 0
+                delivery.telegram_message_id = getattr(message, "id", None)
+                media = getattr(message, "media", None)
+                document = getattr(media, "document", None)
+                if media is not None:
+                    reusable_media[artifact.number] = media
+                file_id = getattr(document, "id", None)
+                delivery.telegram_file_id = str(file_id) if file_id is not None else None
+                delivery.last_error = None
+                delivery.next_attempt_at = self.now()
+                await self.session.commit()
+
+            if delivery.next_part > len(artifacts):
+                delivery.status = DeliveryStatus.SUCCEEDED
+                delivery.next_attempt_at = None
+                delivery.delivered_at = self.now()
+                await self.session.commit()
+                log.info(
+                    "telegram_delivery_attempt_succeeded",
+                    run_id=run.id,
+                    profile_id=run.profile_id,
+                    delivery_id=delivery.id,
+                    admin_id=admin_id,
+                    telegram_id=authorized.telegram_user_id,
+                    status=delivery.status.value,
+                    attempt=delivery.attempts,
+                    telegram_message_id=delivery.telegram_message_id,
+                    total_parts=len(artifacts),
+                )
 
         await self._cancel_boundary(run)
         pending = any(delivery.status is DeliveryStatus.PENDING for delivery in deliveries.values())

@@ -23,6 +23,10 @@ def test_docker_deployment_security_and_tools() -> None:
     assert "pg_isready" in compose
     assert "postgres_data_v18:/var/lib/postgresql" in compose
     assert "condition: service_healthy" in compose
+    assert '"host.docker.internal:host-gateway"' in compose
+    worker = compose.split("  worker:", 1)[1].split("\n  cli:", 1)[0]
+    assert "extra_hosts:" in worker
+    assert "network_mode: host" not in compose
     assert "sqlite+aiosqlite:////data/runtime/data/app.sqlite3" not in compose
     assert "state:/data/state" not in compose
     assert "\nvolumes:\n  state:" not in compose
