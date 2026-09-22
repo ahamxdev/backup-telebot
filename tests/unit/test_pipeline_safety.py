@@ -162,12 +162,17 @@ def test_disk_backpressure(settings, monkeypatch: pytest.MonkeyPatch) -> None:
     assert not disk_has_capacity(settings, 0)
 
 
-def test_docker_separates_bot_worker_and_has_no_socket() -> None:
+def test_docker_separates_bot_worker_and_confines_socket_to_gitlab_helper() -> None:
     compose = Path("compose.yml").read_text()
     dockerfile = Path("Dockerfile").read_text()
     assert "bot:" in compose and "worker:" in compose
     assert "backup-bot" in compose and "backup-worker" in compose
-    assert "docker.sock" not in compose
+    bot = compose.split("  bot:", 1)[1].split("\n  worker:", 1)[0]
+    worker = compose.split("  worker:", 1)[1].split("\n  gitlab-helper:", 1)[0]
+    helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
+    assert "docker.sock" not in bot
+    assert "docker.sock" not in worker
+    assert "docker.sock" in helper
     assert "USER 10001:10001" in dockerfile
     for tool in ("postgresql-client", "mariadb-client", "rsync", "zstd", "age"):
         assert tool in dockerfile

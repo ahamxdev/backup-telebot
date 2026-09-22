@@ -199,6 +199,7 @@ class TelegramStateMixin:
         keys = {
             SourceType.DATABASE: "source_database",
             SourceType.FILES_DIRECTORIES: "source_files_directories",
+            SourceType.GITLAB: "source_gitlab",
         }
         return t(language, keys[source_type])
 

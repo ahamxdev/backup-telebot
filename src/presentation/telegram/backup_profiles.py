@@ -110,7 +110,7 @@ class BackupProfilesMixin(RemoteServersMixin):
         }
         access = AccessRepository(session)
         for profile in profiles:
-            await session.refresh(profile, ("database_source", "files_source"))
+            await session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
             source_details = TelegramHtml("")
             if profile.files_source is not None:
                 await session.refresh(profile.files_source, ("paths",))
@@ -127,6 +127,14 @@ class BackupProfilesMixin(RemoteServersMixin):
                     "file_source_details",
                     location=t(language, location_key),
                     paths=paths,
+                )
+            elif profile.gitlab_source is not None:
+                source_details = t(
+                    language,
+                    "gitlab_source_details",
+                    container=code(profile.gitlab_source.container_name),
+                    host_path=code(profile.gitlab_source.host_backup_path),
+                    worker_path=code(profile.gitlab_source.worker_backup_path),
                 )
             elif profile.database_source is not None:
                 source_details = t(
@@ -235,7 +243,7 @@ class BackupProfilesMixin(RemoteServersMixin):
         profile = await BackupRepository(session).by_id(target_id)
         if profile is None or profile.archived_at is not None:
             raise ValueError("backup profile not found")
-        await session.refresh(profile, ("database_source", "files_source"))
+        await session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
         data: dict[str, Any] = {
             "editing_profile_id": profile.id,
             "name": profile.name,
@@ -269,6 +277,14 @@ class BackupProfilesMixin(RemoteServersMixin):
                 {
                     "existing_files_location": profile.files_source.location,
                     "existing_files_paths": tuple(path.path for path in profile.files_source.paths),
+                }
+            )
+        if profile.gitlab_source is not None:
+            data.update(
+                {
+                    "existing_gitlab_container": profile.gitlab_source.container_name,
+                    "existing_gitlab_host_path": profile.gitlab_source.host_backup_path,
+                    "existing_gitlab_worker_path": profile.gitlab_source.worker_backup_path,
                 }
             )
         item = await self.fsm.set(user.id, State.ADD_BACKUP_NAME, data)

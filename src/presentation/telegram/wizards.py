@@ -13,7 +13,9 @@ from application.profile_config import (
     DatabaseConfig,
     EncryptionConfig,
     FilesConfig,
+    GitLabConfig,
     ScheduleConfig,
+    validate_docker_container_name,
 )
 from application.remote_server_service import RemoteServerService
 from application.settings_service import SettingsService
@@ -248,9 +250,12 @@ class WizardMixin(LanguageHelpMixin):
                     await self._send(
                         user, "choose_database_engine", buttons=database_engines(language)
                     )
-                else:
+                elif source is SourceType.FILES_DIRECTORIES:
                     await self.fsm.transition(user.id, state, State.ADD_BACKUP_FILES_LOCATION)
                     await self._send(user, "choose_location", buttons=locations(language))
+                else:
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_CONTAINER)
+                    await self._send(user, "ask_gitlab_container", buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_DATABASE_ENGINE:
                 engine = ENGINE_ACTIONS.get(action or "")
                 if engine is None:
@@ -396,6 +401,32 @@ class WizardMixin(LanguageHelpMixin):
                 FilesConfig(
                     item.data["location"], item.data["paths"], item.data.get("remote_server_id")
                 ).validate()
+                await self._advance_to_schedule(session, user, item, state)
+            elif state is State.ADD_BACKUP_GITLAB_CONTAINER:
+                if text == "-" and item.data.get("original_source_type") is SourceType.GITLAB:
+                    text = str(item.data["existing_gitlab_container"])
+                item.data["gitlab_container"] = validate_docker_container_name(text)
+                await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_HOST_PATH)
+                await self._send(user, "ask_gitlab_host_path", buttons=cancel_back(language))
+            elif state is State.ADD_BACKUP_GITLAB_HOST_PATH:
+                if text == "-" and item.data.get("original_source_type") is SourceType.GITLAB:
+                    text = str(item.data["existing_gitlab_host_path"])
+                item.data["gitlab_host_path"] = text.strip()
+                await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_WORKER_PATH)
+                await self._send(user, "ask_gitlab_worker_path", buttons=cancel_back(language))
+            elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
+                if text == "-" and item.data.get("original_source_type") is SourceType.GITLAB:
+                    text = str(item.data["existing_gitlab_worker_path"])
+                item.data["gitlab_worker_path"] = text.strip()
+                GitLabConfig(
+                    item.data["gitlab_container"],
+                    item.data["gitlab_host_path"],
+                    item.data["gitlab_worker_path"],
+                ).validate(
+                    self.settings.GITLAB_BACKUP_HOST_ROOT,
+                    str(self.settings.GITLAB_BACKUP_WORKER_ROOT),
+                )
+                await self._send(user, "gitlab_exclusive_warning")
                 await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_SCHEDULE:
                 schedule_kind = SCHEDULE_ACTIONS.get(action or "")
@@ -778,6 +809,21 @@ class WizardMixin(LanguageHelpMixin):
                 None,
             ),
             State.ADD_BACKUP_FILES_PATHS: ("ask_paths", cancel_back(language), "paths"),
+            State.ADD_BACKUP_GITLAB_CONTAINER: (
+                "ask_gitlab_container",
+                cancel_back(language),
+                "gitlab_container",
+            ),
+            State.ADD_BACKUP_GITLAB_HOST_PATH: (
+                "ask_gitlab_host_path",
+                cancel_back(language),
+                "gitlab_host_path",
+            ),
+            State.ADD_BACKUP_GITLAB_WORKER_PATH: (
+                "ask_gitlab_worker_path",
+                cancel_back(language),
+                "gitlab_worker_path",
+            ),
             State.ADD_BACKUP_ARCHIVE: (
                 "archive_explanation",
                 archive_types(language),
@@ -1047,6 +1093,14 @@ class WizardMixin(LanguageHelpMixin):
                 "database_source_details",
                 engine=self._engine_label(user.language_code, engine),
             )
+        elif item.data["source_type"] is SourceType.GITLAB:
+            source_details = t(
+                user.language_code,
+                "gitlab_source_details",
+                container=code(item.data["gitlab_container"]),
+                host_path=code(item.data["gitlab_host_path"]),
+                worker_path=code(item.data["gitlab_worker_path"]),
+            )
         buttons = await self._backup_confirm_buttons(user, item)
         await self._send(
             user,
@@ -1098,6 +1152,10 @@ class WizardMixin(LanguageHelpMixin):
                     return "source"
         elif item.data["source_type"] is SourceType.FILES_DIRECTORIES:
             for field in ("location", "paths"):
+                if field not in item.data:
+                    return "source"
+        elif item.data["source_type"] is SourceType.GITLAB:
+            for field in ("gitlab_container", "gitlab_host_path", "gitlab_worker_path"):
                 if field not in item.data:
                     return "source"
         else:
@@ -1249,6 +1307,8 @@ class WizardMixin(LanguageHelpMixin):
                 allowed_local_roots=self.settings.allowed_source_roots(),
                 denied_local_roots=self.settings.denied_source_roots(),
                 local_source_mounts=self.settings.local_source_mounts(),
+                gitlab_host_root=self.settings.GITLAB_BACKUP_HOST_ROOT,
+                gitlab_worker_root=str(self.settings.GITLAB_BACKUP_WORKER_ROOT),
             )
             if item.data["source_type"] is SourceType.DATABASE:
                 preserve_password = bool(item.data.get("preserve_database_password"))
@@ -1283,6 +1343,25 @@ class WizardMixin(LanguageHelpMixin):
                         **common,
                     )
                 return await service.create_database_profile(user, database=database, **common)
+            if item.data["source_type"] is SourceType.GITLAB:
+                gitlab = GitLabConfig(
+                    item.data["gitlab_container"],
+                    item.data["gitlab_host_path"],
+                    item.data["gitlab_worker_path"],
+                )
+                if "editing_profile_id" in item.data:
+                    return await service.update_configuration(
+                        user,
+                        int(item.data["editing_profile_id"]),
+                        source_type=SourceType.GITLAB,
+                        database=None,
+                        files=None,
+                        gitlab=gitlab,
+                        enabled=bool(item.data["enabled"]),
+                        preserve_age_passphrase=preserve_age,
+                        **common,
+                    )
+                return await service.create_gitlab_profile(user, gitlab=gitlab, **common)
             files = FilesConfig(
                 location=item.data["location"],
                 paths=item.data["paths"],

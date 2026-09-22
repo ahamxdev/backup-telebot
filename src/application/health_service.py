@@ -145,7 +145,7 @@ async def configured_tool_health(
     required: dict[str, tuple[str, str]] = {}
     packages: dict[str, str] = {}
     for profile in profiles:
-        await session.refresh(profile, ("database_source", "files_source"))
+        await session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
         if profile.source_type is SourceType.DATABASE and profile.database_source is not None:
             engine = profile.database_source.engine
             if engine is DatabaseEngine.POSTGRESQL:

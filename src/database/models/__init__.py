@@ -13,6 +13,7 @@ from database.models.backup_profile import (
     BackupProfile,
     DatabaseSource,
     FilesSource,
+    GitLabSource,
 )
 from database.models.backup_run import BackupRun, MSSQLArtifactCleanup
 from database.models.delivery import BackupDelivery
@@ -31,6 +32,7 @@ __all__ = [
     "Base",
     "DatabaseSource",
     "FilesSource",
+    "GitLabSource",
     "MSSQLArtifactCleanup",
     "RemoteServer",
     "RuntimeHeartbeat",

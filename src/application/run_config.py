@@ -20,6 +20,7 @@ from database.models import (
     BackupRun,
     DatabaseSource,
     FilesSource,
+    GitLabSource,
     RemoteServer,
 )
 from domain.enums import (
@@ -68,6 +69,9 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
     """Serialize a fully eager-loaded profile without decrypting any secret."""
     database = profile.database_source
     files = profile.files_source
+    # Callers serialize eager-loaded ORM graphs; direct unit construction may leave this
+    # relationship unloaded, which means there cannot be an attached GitLab source.
+    gitlab = profile.__dict__.get("gitlab_source")
     payload: dict[str, Any] = {
         "schema": 1,
         "profile": {
@@ -101,6 +105,7 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
         },
         "database": None,
         "files": None,
+        "gitlab": None,
         "assigned_admin_ids": sorted(admin_ids or set()),
     }
     if database is not None:
@@ -131,6 +136,12 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
                 }
                 for item in files.paths
             ],
+        }
+    if gitlab is not None:
+        payload["gitlab"] = {
+            "container_name": gitlab.container_name,
+            "host_backup_path": gitlab.host_backup_path,
+            "worker_backup_path": gitlab.worker_backup_path,
         }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
@@ -229,6 +240,13 @@ def restore_run_config(snapshot: str) -> BackupProfile:
         )
         files_source.remote_server = _restore_remote(files["remote_server"])
         profile.files_source = files_source
+    gitlab = payload.get("gitlab")
+    if gitlab is not None:
+        profile.gitlab_source = GitLabSource(
+            container_name=str(gitlab["container_name"]),
+            host_backup_path=str(gitlab["host_backup_path"]),
+            worker_backup_path=str(gitlab["worker_backup_path"]),
+        )
     return profile
 
 
@@ -261,6 +279,7 @@ async def snapshot_legacy_active_runs(session: AsyncSession) -> int:
                 selectinload(BackupRun.profile)
                 .selectinload(BackupProfile.files_source)
                 .selectinload(FilesSource.paths),
+                selectinload(BackupRun.profile).selectinload(BackupProfile.gitlab_source),
             )
             .with_for_update()
         )
@@ -282,6 +301,7 @@ async def snapshot_legacy_active_runs(session: AsyncSession) -> int:
                 ),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.remote_server),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.paths),
+                selectinload(BackupProfile.gitlab_source),
             )
             .execution_options(populate_existing=True)
         )

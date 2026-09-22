@@ -33,6 +33,7 @@ SUPERADMIN_ACTIONS = {
 SOURCE_ACTIONS = {
     "source_database": SourceType.DATABASE,
     "source_files_directories": SourceType.FILES_DIRECTORIES,
+    "source_gitlab": SourceType.GITLAB,
 }
 ENGINE_ACTIONS = {
     "database_postgresql": DatabaseEngine.POSTGRESQL,
@@ -81,6 +82,15 @@ DISPLAYABLE_RUN_ERROR_CODES = frozenset(
         "DISK_CAPACITY",
         "EMPTY_ARCHIVE",
         "EMPTY_BACKUP",
+        "GITLAB_ACQUISITION_FAILED",
+        "GITLAB_ARTIFACT_AMBIGUOUS",
+        "GITLAB_ARTIFACT_INVALID",
+        "GITLAB_BACKUP_FAILED",
+        "GITLAB_BUSY",
+        "GITLAB_HELPER_FAILED",
+        "GITLAB_PATH_ESCAPE",
+        "GITLAB_ROOT_INVALID",
+        "GITLAB_SOURCE_CHANGED",
         "INVALID_COMPRESSION",
         "INVALID_ENCRYPTION",
         "INVALID_FENCE",

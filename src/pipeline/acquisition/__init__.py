@@ -26,6 +26,7 @@ from pipeline.acquisition import (
     remote_files as remote_files_provider,
 )
 from pipeline.acquisition.common import SourceArtifact, SourceBudget
+from pipeline.acquisition.gitlab import acquire_gitlab
 from pipeline.acquisition.local_files import (
     _open_local_root,
     _open_verified_at,
@@ -261,6 +262,10 @@ async def acquire(
     mssql_retrieval_record: Callable[[int, str], Awaitable[None]] | None = None,
     run_id: int | None = None,
 ) -> SourceArtifact:
+    if profile.source_type is SourceType.GITLAB:
+        if profile.gitlab_source is None:
+            raise PipelineError("INVALID_PROFILE", "GitLab source is missing")
+        return await acquire_gitlab(profile.gitlab_source, destination, settings, deadline)
     if profile.source_type is SourceType.FILES_DIRECTORIES:
         path = destination.with_suffix(".tar")
         if profile.files_source and profile.files_source.location is SourceLocation.REMOTE_SERVER:

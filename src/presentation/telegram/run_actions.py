@@ -20,6 +20,7 @@ from presentation.telegram.datetime_format import (
     format_user_timestamp,
     timezone_label,
 )
+from presentation.telegram.formatting import code
 from presentation.telegram.i18n import t
 from presentation.telegram.keyboards import (
     backups_menu,
@@ -153,7 +154,7 @@ class RunActionsMixin(BackupProfilesMixin):
             else run.profile
         )
         if run.configuration_snapshot is None:
-            await session.refresh(profile, ("database_source", "files_source"))
+            await session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
             if profile.files_source is not None:
                 await session.refresh(profile.files_source, ("paths",))
         source_specific = t(user.language_code, "none")
@@ -177,6 +178,14 @@ class RunActionsMixin(BackupProfilesMixin):
                 user.language_code,
                 "database_source_details",
                 engine=self._engine_label(user.language_code, profile.database_source.engine),
+            )
+        elif profile.gitlab_source is not None:
+            source_specific = t(
+                user.language_code,
+                "gitlab_source_details",
+                container=code(profile.gitlab_source.container_name),
+                host_path=code(profile.gitlab_source.host_backup_path),
+                worker_path=code(profile.gitlab_source.worker_backup_path),
             )
         source_details = t(
             user.language_code,

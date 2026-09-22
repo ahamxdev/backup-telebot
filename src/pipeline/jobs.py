@@ -128,6 +128,7 @@ class RunService:
                 ),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.remote_server),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.paths),
+                selectinload(BackupProfile.gitlab_source),
             )
             .with_for_update()
         )

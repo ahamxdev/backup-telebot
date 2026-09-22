@@ -14,6 +14,7 @@ dependencies = [
   "asyncpg>=0.30.0,<1",
   "asyncssh>=2.24.0,<3",
   "cryptography>=50.0.0,<51",
+  "docker>=7.1.0,<8",
   "pydantic-settings>=2.15.0",
   "pyOpenSSL>=26.4.0,<27",
   "python-tds>=1.17.1,<2",
@@ -27,6 +28,7 @@ dependencies = [
 [project.scripts]
 backup-bot = "main:entrypoint"
 backup-worker = "bootstrap.worker:entrypoint"
+backup-gitlab-helper = "bootstrap.gitlab_helper:entrypoint"
 backupctl = "cli.main:app"
 
 [dependency-groups]
@@ -89,4 +91,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pytds", "pytds.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["docker", "docker.*"]
 ignore_missing_imports = true

@@ -26,8 +26,8 @@ RUN uv sync --frozen --no-dev \
     && groupadd --gid 10001 backupbot \
     && useradd --uid 10001 --gid backupbot --no-create-home --home-dir /app backupbot \
     && mkdir -p /data/runtime/data /data/runtime/telegram \
-       /data/runtime/work /data/runtime/pending-delivery \
-    && chown -R backupbot:backupbot /app /data
+       /data/runtime/work /data/runtime/pending-delivery /run/gitlab-helper \
+    && chown -R backupbot:backupbot /app /data /run/gitlab-helper
 
 ENV PATH="/app/.venv/bin:$PATH"
 USER 10001:10001

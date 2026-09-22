@@ -166,6 +166,7 @@ class PipelineRunner:
                 selectinload(BackupRun.profile)
                 .selectinload(BackupProfile.files_source)
                 .selectinload(FilesSource.paths),
+                selectinload(BackupRun.profile).selectinload(BackupProfile.gitlab_source),
             )
         )
         if run is None:

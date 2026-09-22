@@ -104,6 +104,7 @@ def source_types(language: LanguageCode) -> list[list[Button]]:
         language,
         ("source_database",),
         ("source_files_directories",),
+        ("source_gitlab",),
         ("back", "cancel"),
     )
 

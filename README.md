@@ -49,6 +49,27 @@ File/directory profiles accept multiple absolute local paths under `ALLOWED_SOUR
 multiple paths on one enabled remote server. SQLite-looking files are marked so the execution
 phase can use a consistent SQLite snapshot instead of copying a live database file.
 
+GitLab profiles run GitLab's native application backup and then pass the single newly created
+`*_gitlab_backup.tar` through the same archive, compression, encryption, multipart delivery,
+retention, history, and recovery pipeline. The profile's host and worker paths must exactly match
+the operator-configured `GITLAB_BACKUP_HOST_ROOT` and `/host/gitlab-backups`; Telegram input can
+never create a dynamic host mount. The configured directory is exclusive to this feature: all
+existing contents are safely removed before each native run, and the new native tar is removed
+only after it has been copied into the managed workspace and its size and SHA-256 have been
+verified.
+
+The general bot and worker do not receive Docker's control socket. A dedicated `gitlab-helper`
+service owns that socket and exposes one local Unix-socket operation with a fixed argv equivalent
+to `docker exec -t <validated-container> gitlab-backup create`. Set `DOCKER_GID` to the numeric
+host group that owns `/var/run/docker.sock`. Set `GITLAB_BACKUP_HOST_ROOT` to the existing GitLab
+backup directory before starting Compose; it is mounted read/write only into the worker at
+`/host/gitlab-backups`. Set `GITLAB_BACKUP_GID` to a host group with read/write/delete access to
+that directory. Container names accept only a conservative alphanumeric, underscore, dot, and
+hyphen form.
+
+> GitLab application backups are not complete machine backups. Back up `gitlab.rb` and
+> `gitlab-secrets.json` separately and protect them appropriately for disaster recovery.
+
 Every profile stores a closed, validated schedule, compression format/preset, encryption mode,
 and assigned admins. User-visible schedule times use the configurable IANA Backup Timezone;
 database timestamps remain UTC. Compression resource limits live in global system settings.
@@ -287,8 +308,9 @@ allows archival. Active runtime directories remain owned by container UID/GID 10
 owner-only permissions.
 
 The base and uv images are digest-pinned, Python dependencies are lock-file pinned, and
-services run as UID/GID 10001 with all Linux capabilities dropped. No Docker socket is
-mounted. The image includes Debian's versioned PostgreSQL 15 client. Install additional
+services run as UID/GID 10001 with all Linux capabilities dropped. Only the narrowly scoped
+`gitlab-helper` receives the Docker socket; the bot and general worker never receive it.
+The image includes Debian's versioned PostgreSQL 15 client. Install additional
 versioned client packages in a derived image for other PostgreSQL server majors; the worker
 intentionally refuses a mismatched client.
 

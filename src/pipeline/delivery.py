@@ -248,6 +248,7 @@ class DeliveryService:
                         FilesSource.remote_server
                     ),
                     selectinload(BackupProfile.files_source).selectinload(FilesSource.paths),
+                    selectinload(BackupProfile.gitlab_source),
                 )
             )
             if live_profile is None:

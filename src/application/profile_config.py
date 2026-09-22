@@ -18,6 +18,7 @@ from domain.enums import (
 
 _HOST = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.:-]{0,251}[A-Za-z0-9])?$")
 _AGE_RECIPIENT = re.compile(r"^age1[0-9a-z]{20,100}$")
+_DOCKER_CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
 def validate_host(value: str) -> str:
@@ -39,6 +40,13 @@ def validate_absolute_path(value: str) -> str:
     if not clean.startswith("/") or ".." in path.parts or "\x00" in clean or len(clean) > 1024:
         raise ValueError("path must be an absolute normalized path")
     return str(path)
+
+
+def validate_docker_container_name(value: str) -> str:
+    clean = value.strip()
+    if not _DOCKER_CONTAINER.fullmatch(clean):
+        raise ValueError("invalid Docker container name")
+    return clean
 
 
 class LocalSourcePathError(ValueError):
@@ -376,6 +384,25 @@ class FilesConfig:
             raise ValueError("remote file sources require a remote server")
         if self.location is SourceLocation.LOCAL and self.remote_server_id is not None:
             raise ValueError("local file sources cannot reference a remote server")
+        return self
+
+
+@dataclass(frozen=True)
+class GitLabConfig:
+    container_name: str
+    host_backup_path: str
+    worker_backup_path: str
+
+    def validate(self, approved_host_root: str, approved_worker_root: str) -> "GitLabConfig":
+        validate_docker_container_name(self.container_name)
+        host = validate_absolute_path(self.host_backup_path)
+        worker = validate_absolute_path(self.worker_backup_path)
+        if host == "/" or worker == "/":
+            raise ValueError("GitLab backup root cannot be filesystem root")
+        if host != validate_absolute_path(approved_host_root):
+            raise ValueError("GitLab host backup path is not the operator-approved root")
+        if worker != validate_absolute_path(approved_worker_root):
+            raise ValueError("GitLab worker path is not the operator-approved root")
         return self
 
 

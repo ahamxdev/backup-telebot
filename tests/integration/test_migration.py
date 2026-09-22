@@ -42,6 +42,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
             "backup_runs",
             "backup_artifacts",
             "backup_deliveries",
+            "gitlab_sources",
             "mssql_artifact_cleanups",
             "runtime_heartbeats",
         } <= tables
@@ -61,7 +62,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         } <= run_columns
         run_indexes = {row[1] for row in connection.execute("PRAGMA index_list(backup_runs)")}
         assert "ix_backup_runs_failed_artifact_cleanup_at" in run_indexes
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0015",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0016",)
         profile_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(backup_profiles)")
         }
@@ -117,7 +118,7 @@ def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Pa
         assert connection.execute("SELECT event_type FROM audit_events").fetchone() == (
             "preserved",
         )
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0015",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0016",)
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_heartbeats'"
         ).fetchone() == ("runtime_heartbeats",)

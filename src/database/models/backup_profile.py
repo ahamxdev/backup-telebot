@@ -14,6 +14,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,7 +43,7 @@ class BackupProfile(TimestampMixin, Base):
     __tablename__ = "backup_profiles"
     __table_args__ = (
         CheckConstraint(
-            "source_type IN ('DATABASE', 'FILES_DIRECTORIES')",
+            "source_type IN ('DATABASE', 'FILES_DIRECTORIES', 'GITLAB')",
             name="ck_backup_profiles_source_type",
         ),
         CheckConstraint("status IN ('DRAFT', 'ARCHIVED')", name="ck_backup_profiles_status"),
@@ -181,6 +182,9 @@ class BackupProfile(TimestampMixin, Base):
     files_source: Mapped[FilesSource | None] = relationship(
         back_populates="profile", cascade="all, delete-orphan", uselist=False
     )
+    gitlab_source: Mapped[GitLabSource | None] = relationship(
+        back_populates="profile", cascade="all, delete-orphan", uselist=False
+    )
     runs: Mapped[list[BackupRun]] = relationship(back_populates="profile")
 
 
@@ -259,6 +263,25 @@ class FilesSource(Base):
     paths: Mapped[list[BackupPath]] = relationship(
         back_populates="source", cascade="all, delete-orphan"
     )
+
+
+class GitLabSource(Base):
+    __tablename__ = "gitlab_sources"
+    __table_args__ = (
+        UniqueConstraint("host_backup_path", name="uq_gitlab_sources_host_root"),
+        UniqueConstraint("worker_backup_path", name="uq_gitlab_sources_worker_root"),
+        CheckConstraint("length(container_name) BETWEEN 1 AND 128", name="ck_gitlab_container"),
+        CheckConstraint("length(host_backup_path) > 1", name="ck_gitlab_host_path"),
+        CheckConstraint("length(worker_backup_path) > 1", name="ck_gitlab_worker_path"),
+    )
+
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("backup_profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    container_name: Mapped[str] = mapped_column(String(128))
+    host_backup_path: Mapped[str] = mapped_column(String(1024))
+    worker_backup_path: Mapped[str] = mapped_column(String(1024))
+    profile: Mapped[BackupProfile] = relationship(back_populates="gitlab_source")
 
 
 class BackupPath(Base):

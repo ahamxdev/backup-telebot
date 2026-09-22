@@ -14,6 +14,7 @@ class LanguageCode(StrEnum):
 class SourceType(StrEnum):
     DATABASE = "DATABASE"
     FILES_DIRECTORIES = "FILES_DIRECTORIES"
+    GITLAB = "GITLAB"
 
     # Source-compatible aliases. They serialize only to the two supported values.
     DOCKER_DATABASE = "DATABASE"

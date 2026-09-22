@@ -13,6 +13,9 @@ x-service: &service
     WORK_ROOT: /data/runtime/work
     PENDING_DELIVERY_ROOT: /data/runtime/pending-delivery
     LOCAL_SOURCE_MOUNTS: /etc:/host/etc
+    GITLAB_BACKUP_HOST_ROOT: ${GITLAB_BACKUP_HOST_ROOT:-/opt/gitlab/data/backups}
+    GITLAB_BACKUP_WORKER_ROOT: /host/gitlab-backups
+    GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
   restart: unless-stopped
   init: true
   read_only: true
@@ -76,6 +79,8 @@ services:
     command: ["backup-bot"]
   worker:
     <<: *service
+    group_add:
+      - ${GITLAB_BACKUP_GID:-998}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -83,7 +88,42 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      gitlab-helper:
+        condition: service_started
     command: ["backup-worker"]
+    volumes:
+      - type: bind
+        source: ./.runtime
+        target: /data/runtime
+        bind:
+          create_host_path: false
+      - /etc:/host/etc:ro
+      - type: bind
+        source: ${GITLAB_BACKUP_HOST_ROOT:-/opt/gitlab/data/backups}
+        target: /host/gitlab-backups
+        bind:
+          create_host_path: false
+      - gitlab_helper_control:/run/gitlab-helper
+
+  gitlab-helper:
+    build: .
+    command: ["backup-gitlab-helper"]
+    environment:
+      GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    tmpfs: ["/tmp:mode=0700,uid=10001,gid=10001"]
+    group_add:
+      - ${DOCKER_GID:-999}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - gitlab_helper_control:/run/gitlab-helper
 
   cli:
     <<: *service
@@ -100,3 +140,4 @@ services:
 
 volumes:
   postgres_data_v18:
+  gitlab_helper_control:

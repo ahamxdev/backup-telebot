@@ -9,6 +9,7 @@ from application.profile_config import (
     DatabaseConfig,
     EncryptionConfig,
     FilesConfig,
+    GitLabConfig,
     LocalSourcePathMapper,
     ScheduleConfig,
     map_local_source_path,
@@ -20,6 +21,7 @@ from database.models import (
     BackupProfile,
     DatabaseSource,
     FilesSource,
+    GitLabSource,
     User,
     utc_now,
 )
@@ -49,6 +51,8 @@ class BackupService:
         allowed_local_roots: tuple[str, ...] | None = None,
         denied_local_roots: tuple[str, ...] = ("/proc", "/sys", "/dev", "/run"),
         local_source_mounts: tuple[tuple[str, str], ...] = (),
+        gitlab_host_root: str = "/opt/gitlab/data/backups",
+        gitlab_worker_root: str = "/host/gitlab-backups",
     ) -> None:
         self.session = session
         self.backups = BackupRepository(session)
@@ -57,6 +61,8 @@ class BackupService:
         self.allowed_local_roots = allowed_local_roots
         self.denied_local_roots = denied_local_roots
         self.local_source_mounts = local_source_mounts
+        self.gitlab_host_root = gitlab_host_root
+        self.gitlab_worker_root = gitlab_worker_root
 
     def _persisted_file_paths(self, files: FilesConfig) -> tuple[str, ...]:
         if files.location is not SourceLocation.LOCAL or self.allowed_local_roots is None:
@@ -138,6 +144,33 @@ class BackupService:
             files=files,
         )
 
+    async def create_gitlab_profile(
+        self,
+        actor: User,
+        *,
+        name: str,
+        description: str | None,
+        gitlab: GitLabConfig,
+        schedule: ScheduleConfig,
+        compression: CompressionConfig,
+        encryption: EncryptionConfig,
+        admin_ids: set[int],
+    ) -> BackupProfile:
+        AdminService.require_superadmin(actor)
+        gitlab.validate(self.gitlab_host_root, self.gitlab_worker_root)
+        await self._validate_gitlab_root_available(gitlab)
+        return await self._create_configured(
+            actor,
+            name,
+            description,
+            SourceType.GITLAB,
+            schedule,
+            compression,
+            encryption,
+            admin_ids,
+            gitlab=gitlab,
+        )
+
     async def _create_configured(
         self,
         actor: User,
@@ -151,6 +184,7 @@ class BackupService:
         *,
         database: DatabaseConfig | None = None,
         files: FilesConfig | None = None,
+        gitlab: GitLabConfig | None = None,
     ) -> BackupProfile:
         clean_name = validate_name(name)
         clean_description = description.strip() if description else None
@@ -230,6 +264,12 @@ class BackupService:
                     )
                     for path in dict.fromkeys(persisted_paths)
                 ],
+            )
+        if gitlab is not None:
+            profile.gitlab_source = GitLabSource(
+                container_name=gitlab.container_name.strip(),
+                host_backup_path=gitlab.host_backup_path.strip(),
+                worker_backup_path=gitlab.worker_backup_path.strip(),
             )
         await self.session.flush()
         await AccessRepository(self.session).replace_for_profile(profile.id, admin_ids, actor.id)
@@ -323,15 +363,16 @@ class BackupService:
         enabled: bool,
         database: DatabaseConfig | None = None,
         files: FilesConfig | None = None,
+        gitlab: GitLabConfig | None = None,
         preserve_database_password: bool = False,
         preserve_age_passphrase: bool = False,
     ) -> BackupProfile:
         """Atomically replace a profile configuration after complete validation."""
         AdminService.require_superadmin(actor)
         profile = await self._active(profile_id)
-        await self.session.refresh(profile, ("database_source", "files_source"))
+        await self.session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
         await self._reserve_profile(profile.id)
-        await self.session.refresh(profile, ("database_source", "files_source"))
+        await self.session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
         if profile.next_scheduled_at is not None and profile.next_scheduled_at.tzinfo is None:
             profile.next_scheduled_at = profile.next_scheduled_at.replace(tzinfo=UTC)
         clean_name = validate_name(name)
@@ -350,12 +391,14 @@ class BackupService:
         compression.validate()
         encryption.validate(allow_missing_passphrase=preserve_age_passphrase)
         await self._validate_admins(admin_ids)
-        if (database is None) == (files is None):
+        if sum(item is not None for item in (database, files, gitlab)) != 1:
             raise ValueError("exactly one source configuration is required")
         if source_type is SourceType.DATABASE and database is None:
             raise ValueError("database source configuration is required")
         if source_type is SourceType.FILES_DIRECTORIES and files is None:
             raise ValueError("files source configuration is required")
+        if source_type is SourceType.GITLAB and gitlab is None:
+            raise ValueError("GitLab source configuration is required")
 
         old_database = profile.database_source
         old_age_secret = profile.encrypted_age_passphrase
@@ -387,6 +430,9 @@ class BackupService:
                 )
                 if not server.enabled:
                     raise ValueError("remote server must be enabled")
+        if gitlab is not None:
+            gitlab.validate(self.gitlab_host_root, self.gitlab_worker_root)
+            await self._validate_gitlab_root_available(gitlab, exclude_profile_id=profile.id)
         if preserve_age_passphrase and (
             encryption.mode is not EncryptionMode.AGE_PASSPHRASE or old_age_secret is None
         ):
@@ -431,6 +477,8 @@ class BackupService:
             await self.session.delete(profile.database_source)
         if profile.files_source is not None:
             await self.session.delete(profile.files_source)
+        if profile.gitlab_source is not None:
+            await self.session.delete(profile.gitlab_source)
         await self.session.flush()
         if database is not None:
             encrypted_password = (
@@ -454,9 +502,7 @@ class BackupService:
                 mssql_host_backup_path=database.mssql_host_backup_path,
                 artifact_remote_server_id=database.artifact_remote_server_id,
             )
-        else:
-            if files is None:
-                raise ValueError("files source configuration is required")
+        elif files is not None:
             persisted_paths = self._persisted_file_paths(files)
             profile.files_source = FilesSource(
                 location=files.location,
@@ -471,6 +517,14 @@ class BackupService:
                     for path in dict.fromkeys(persisted_paths)
                 ],
             )
+        elif gitlab is not None:
+            profile.gitlab_source = GitLabSource(
+                container_name=gitlab.container_name.strip(),
+                host_backup_path=gitlab.host_backup_path.strip(),
+                worker_backup_path=gitlab.worker_backup_path.strip(),
+            )
+        else:
+            raise ValueError("source configuration is required")
         await self.session.flush()
         await AccessRepository(self.session).replace_for_profile(profile.id, admin_ids, actor.id)
         await self.audit.record(
@@ -512,6 +566,25 @@ class BackupService:
         if count != len(admin_ids):
             raise ValueError("one or more enabled admins do not exist")
 
+    async def _validate_gitlab_root_available(
+        self, gitlab: GitLabConfig, *, exclude_profile_id: int | None = None
+    ) -> None:
+        query = (
+            select(GitLabSource.profile_id)
+            .join(BackupProfile)
+            .where(
+                BackupProfile.archived_at.is_(None),
+                (
+                    (GitLabSource.host_backup_path == gitlab.host_backup_path)
+                    | (GitLabSource.worker_backup_path == gitlab.worker_backup_path)
+                ),
+            )
+        )
+        if exclude_profile_id is not None:
+            query = query.where(GitLabSource.profile_id != exclude_profile_id)
+        if await self.session.scalar(query) is not None:
+            raise ValueError("GitLab backup root is already managed by another profile")
+
     async def _reserve_profile(self, profile_id: int) -> None:
         """Take the same row-level write fence used while a run snapshot is queued."""
         reserved = (
@@ -529,6 +602,9 @@ class BackupService:
     async def delete(self, actor: User, profile_id: int) -> None:
         AdminService.require_superadmin(actor)
         profile = await self._active(profile_id)
+        await self.session.refresh(profile, ("gitlab_source",))
+        if profile.gitlab_source is not None:
+            await self.session.delete(profile.gitlab_source)
         profile.enabled, profile.archived_at = False, utc_now()
         await self.session.execute(
             delete(AdminBackupAccess).where(AdminBackupAccess.backup_profile_id == profile.id)

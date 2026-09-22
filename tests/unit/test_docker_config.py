@@ -14,7 +14,13 @@ def test_docker_deployment_security_and_tools() -> None:
     assert "USER 10001:10001" in dockerfile
     assert 'command: ["backup-bot"]' in compose
     assert 'command: ["backup-worker"]' in compose
-    assert "docker.sock" not in compose
+    bot = compose.split("  bot:", 1)[1].split("\n  worker:", 1)[0]
+    worker = compose.split("  worker:", 1)[1].split("\n  gitlab-helper:", 1)[0]
+    helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
+    assert "docker.sock" not in bot
+    assert "docker.sock" not in worker
+    assert "/var/run/docker.sock:/var/run/docker.sock" in helper
+    assert 'command: ["backup-gitlab-helper"]' in helper
     assert 'cap_drop: ["ALL"]' in compose
     assert "source: ./.runtime" in compose
     assert "target: /data/runtime" in compose
@@ -24,7 +30,6 @@ def test_docker_deployment_security_and_tools() -> None:
     assert "postgres_data_v18:/var/lib/postgresql" in compose
     assert "condition: service_healthy" in compose
     assert '"host.docker.internal:host-gateway"' in compose
-    worker = compose.split("  worker:", 1)[1].split("\n  cli:", 1)[0]
     assert "extra_hosts:" in worker
     assert "network_mode: host" not in compose
     assert "sqlite+aiosqlite:////data/runtime/data/app.sqlite3" not in compose

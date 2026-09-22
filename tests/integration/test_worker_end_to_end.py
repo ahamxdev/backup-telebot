@@ -1,28 +1,42 @@
+import os
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
 from pydantic import SecretStr
 from sqlalchemy import select
 
+from application.profile_config import (
+    CompressionConfig,
+    EncryptionConfig,
+    GitLabConfig,
+    ScheduleConfig,
+)
+from application.services import BackupService
 from database.models import (
     AdminBackupAccess,
     AuditEvent,
     BackupPath,
     BackupProfile,
     FilesSource,
+    GitLabSource,
     User,
 )
 from domain.enums import (
     CompressionFormat,
+    CompressionPreset,
     EncryptionMode,
     ProfileStatus,
     Role,
     RunStatus,
+    ScheduleKind,
     SourceLocation,
     SourceType,
 )
+from pipeline.acquisition import gitlab as gitlab_provider
 from pipeline.jobs import RunService
 from pipeline.worker import PipelineRunner
+from security import SecretCipher
 
 
 class SuccessfulTransport:
@@ -106,3 +120,67 @@ async def test_local_worker_pipeline_to_delivery_and_cleanup(
         "backup_run_delivery_pending",
         "backup_run_succeeded",
     } <= transitions
+
+
+async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline(
+    database, session, settings, tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "gitlab-native"
+    root.mkdir()
+    key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    configured = settings.model_copy(
+        update={
+            "MASTER_ENCRYPTION_KEY_B64": SecretStr(key),
+            "GITLAB_BACKUP_HOST_ROOT": "/opt/gitlab/data/backups",
+            "GITLAB_BACKUP_WORKER_ROOT": root,
+            "GITLAB_HELPER_SOCKET": tmp_path / "control" / "helper.sock",
+            "GITLAB_STABILITY_INTERVAL_SECONDS": 0.001,
+            "GITLAB_STABILITY_CHECKS": 2,
+            "TELEGRAM_MAX_FILE_BYTES": 128,
+            "MIN_FREE_DISK_BYTES": 0,
+        }
+    )
+    owner = User(telegram_user_id=201, display_name="root", role=Role.SUPERADMIN)
+    admin = User(telegram_user_id=202, display_name="admin", role=Role.ADMIN)
+    session.add_all((owner, admin))
+    await session.flush()
+    service = BackupService(
+        session,
+        SecretCipher(key),
+        gitlab_host_root=configured.GITLAB_BACKUP_HOST_ROOT,
+        gitlab_worker_root=str(root),
+    )
+    profile = await service.create_gitlab_profile(
+        owner,
+        name="GitLab E2E",
+        description=None,
+        gitlab=GitLabConfig("gitlab", "/opt/gitlab/data/backups", str(root)),
+        schedule=ScheduleConfig(ScheduleKind.MANUAL),
+        compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
+        encryption=EncryptionConfig(EncryptionMode.AGE_PASSPHRASE, passphrase="strong secret"),
+        admin_ids={admin.id},
+    )
+
+    async def invoke(source: GitLabSource, configured_settings, deadline_seconds: float) -> None:
+        del source, configured_settings, deadline_seconds
+        payload = tmp_path / "gitlab-payload"
+        payload.write_bytes(os.urandom(4096))
+        with tarfile.open(root / "200_gitlab_backup.tar", "w") as native:
+            native.add(payload, arcname="repositories/data")
+
+    monkeypatch.setattr(gitlab_provider, "_invoke_helper", invoke)
+    queued = await RunService(session).enqueue_manual(owner, profile.id)
+    claimed = await RunService(session).claim("gitlab-worker", 120, (RunStatus.QUEUED,))
+    assert claimed is not None
+    transport = SuccessfulTransport()
+
+    await PipelineRunner(database.session_factory, configured, transport, "gitlab-worker").execute(
+        queued.run.id
+    )
+
+    await session.refresh(queued.run)
+    assert queued.run.status is RunStatus.SUCCEEDED, queued.run.error_message
+    assert queued.run.final_filename is not None
+    assert queued.run.final_filename.endswith(".tar.gz.age")
+    assert len(transport.paths) > 2
+    assert list(root.iterdir()) == []

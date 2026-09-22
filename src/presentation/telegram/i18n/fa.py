@@ -182,6 +182,7 @@ STRINGS: dict[str, str] = {
     "choose_source": "نوع منبع را انتخاب کنید:",
     "source_database": "🗄 پایگاه داده",
     "source_files_directories": "📁 فایل‌ها و پوشه‌ها",
+    "source_gitlab": "🦊 GitLab",
     "database_postgresql": "PostgreSQL",
     "database_mysql": "MySQL / MariaDB",
     "database_mssql": "Microsoft SQL Server",
@@ -281,6 +282,19 @@ STRINGS: dict[str, str] = {
     "ask_mssql_host_path": "مسیر متناظر mount شده روی میزبان ریموت را وارد کنید:",
     "choose_location": "محل منبع فایل/پوشه را انتخاب کنید:",
     "ask_paths": "یک یا چند مسیر مطلق فایل / پوشه، هرکدام در یک خط وارد کنید:",
+    "ask_gitlab_container": "نام کانتینر Docker گیت‌لب را وارد کنید (مثال: gitlab_natrixo):",
+    "ask_gitlab_host_path": "مسیر تأییدشده پوشه پشتیبان گیت‌لب روی میزبان را وارد کنید:",
+    "ask_gitlab_worker_path": "مسیر mount شده و قابل مشاهده برای worker را وارد کنید:",
+    "gitlab_exclusive_warning": (
+        "⚠️ پوشه پشتیبان گیت‌لب منحصراً توسط این پروفایل مدیریت می‌شود. فایل‌های موجود "
+        "پیش از هر پشتیبان جدید حذف می‌شوند.\n\nبرای بازیابی کامل، gitlab.rb و "
+        "gitlab-secrets.json را جداگانه پشتیبان‌گیری کنید."
+    ),
+    "gitlab_source_details": (
+        "\n🦊 <b>منبع گیت‌لب</b>\nکانتینر: {container}\nمسیر میزبان: {host_path}\n"
+        "مسیر worker: {worker_path}\n\n⚠️ فایل‌های موجود پیش از هر پشتیبان حذف می‌شوند. "
+        "از gitlab.rb و gitlab-secrets.json جداگانه پشتیبان بگیرید."
+    ),
     "choose_schedule": "زمان‌بندی را انتخاب کنید. زمان‌ها بر اساس منطقه زمانی بکاپ هستند: {timezone}",
     "ask_schedule_interval": "N را به‌صورت عدد صحیح مثبت وارد کنید:",
     "ask_schedule_daily": "زمان را به‌شکل HH:MM وارد کنید:",
