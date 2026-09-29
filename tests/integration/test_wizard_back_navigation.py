@@ -5,9 +5,10 @@ from pydantic import SecretStr
 
 from application.bootstrap_service import BootstrapService
 from config.settings import Settings
-from domain.enums import SourceLocation, SourceType
+from domain.enums import LanguageCode, SourceLocation, SourceType
 from infrastructure.telegram.transport import TelegramTransport
 from presentation.telegram.dispatcher import TelegramDispatcher
+from presentation.telegram.i18n import t
 from presentation.telegram.runtime import State
 
 
@@ -97,7 +98,7 @@ async def test_backup_and_edit_wizard_back_render_actual_steps(
         assert "Enter a description" in client.messages[-1]
         assert "daily" in client.messages[-1]
         await dispatcher._back(session, actor)
-        assert "Enter the backup name:" in client.messages[-1]
+        assert "<b>Backup Name</b>" in client.messages[-1]
         assert "Config" in client.messages[-1]
 
         await dispatcher.fsm.set(actor.id, State.EDIT_ADMIN_ACTION, {"target_id": 99})
@@ -142,7 +143,7 @@ async def test_gitlab_location_back_navigation_preserves_draft(
         )
         await dispatcher._flow(session, actor, "", "source_gitlab", item)
         assert item.state is State.ADD_BACKUP_GITLAB_LOCATION
-        assert client.messages[-1] == "Where is GitLab running?"
+        assert client.messages[-1] == t(LanguageCode.ENGLISH, "choose_gitlab_location")
 
         await dispatcher._flow(session, actor, "", "location_local", item)
         assert item.state is State.ADD_BACKUP_GITLAB_CONTAINER
@@ -156,8 +157,8 @@ async def test_gitlab_location_back_navigation_preserves_draft(
         item.data["gitlab_backup_path"] = "/host/gitlab-backups"
 
         await dispatcher._back(session, actor)
-        assert "GitLab Docker container name" in client.messages[-1]
+        assert "<b>GitLab Container</b>" in client.messages[-1]
         assert "gitlab" in client.messages[-1]
         await dispatcher._back(session, actor)
-        assert client.messages[-1] == "Where is GitLab running?"
+        assert client.messages[-1] == t(LanguageCode.ENGLISH, "choose_gitlab_location")
         assert item.data["gitlab_backup_path"] == "/host/gitlab-backups"

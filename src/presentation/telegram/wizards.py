@@ -1,4 +1,5 @@
 import secrets
+from collections.abc import Awaitable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -419,7 +420,11 @@ class WizardMixin(LanguageHelpMixin):
                 else:
                     servers = await RemoteServerRepository(session).list_active(enabled_only=True)
                     if not servers:
-                        raise ValueError("no enabled remote server")
+                        await self._send(user, "no_remote_servers_available")
+                        await self._send(
+                            user, "choose_gitlab_location", buttons=locations(language)
+                        )
+                        return
                     item.option_ids = {
                         f"🖥 {server.name} · {index}": server.id
                         for index, server in enumerate(servers, 1)
@@ -781,7 +786,7 @@ class WizardMixin(LanguageHelpMixin):
             await self.transport.send_text(user.telegram_user_id, prompt, buttons=buttons)
             return
         current_label = escaped(t(user.language_code, "current_value"))
-        message = TelegramHtml(f"{escaped(prompt)}\n\n{current_label}\n{code(current)}")
+        message = TelegramHtml(f"{prompt}\n\n{current_label}\n{code(current)}")
         await self.transport.send_text(user.telegram_user_id, message, buttons=buttons)
 
     async def _render_wizard_step(
@@ -1308,6 +1313,8 @@ class WizardMixin(LanguageHelpMixin):
         try:
             profile = await self._persist_profile(session, user, item)
         except (ConflictError, KeyError, ValueError) as exc:
+            await session.rollback()
+            await session.refresh(user)
             reason = " ".join(str(exc).split())[:500] or type(exc).__name__
             log.exception(
                 "backup_profile_confirm_failed",
@@ -1318,6 +1325,8 @@ class WizardMixin(LanguageHelpMixin):
             await self._send(user, "backup_confirm_validation_failed", reason=reason)
             return
         except Exception as exc:
+            await session.rollback()
+            await session.refresh(user)
             log.exception(
                 "backup_profile_confirm_failed",
                 **context,
@@ -1360,13 +1369,21 @@ class WizardMixin(LanguageHelpMixin):
     async def _persist_profile(self, session: AsyncSession, user: User, item: Conversation) -> Any:
         if self.cipher is None:
             raise ValueError("secret cipher unavailable")
+        succeeded = False
+
+        async def complete(operation: Awaitable[Any]) -> Any:
+            nonlocal succeeded
+            result = await operation
+            succeeded = True
+            return result
+
         try:
             encryption = item.data["encryption"]
             preserve_age = bool(item.data.get("preserve_age_passphrase"))
             if encryption.mode is EncryptionMode.AGE_PASSPHRASE and not preserve_age:
                 encryption = EncryptionConfig(
                     EncryptionMode.AGE_PASSPHRASE,
-                    passphrase=await self.fsm.secrets.take(user.id, AGE_UNLOCK),
+                    passphrase=await self.fsm.secrets.get(user.id, AGE_UNLOCK),
                 )
             common: dict[str, Any] = {
                 "name": item.data["name"],
@@ -1394,7 +1411,7 @@ class WizardMixin(LanguageHelpMixin):
                     password=(
                         None
                         if preserve_password
-                        else await self.fsm.secrets.take(user.id, DATABASE_CREDENTIAL)
+                        else await self.fsm.secrets.get(user.id, DATABASE_CREDENTIAL)
                     ),
                     tls_mode=item.data["tls_mode"],
                     tls_ca_certificate=item.data.get("tls_ca_certificate"),
@@ -1404,18 +1421,22 @@ class WizardMixin(LanguageHelpMixin):
                     artifact_remote_server_id=item.data.get("artifact_remote_server_id"),
                 )
                 if "editing_profile_id" in item.data:
-                    return await service.update_configuration(
-                        user,
-                        int(item.data["editing_profile_id"]),
-                        source_type=SourceType.DATABASE,
-                        database=database,
-                        files=None,
-                        enabled=bool(item.data["enabled"]),
-                        preserve_database_password=preserve_password,
-                        preserve_age_passphrase=preserve_age,
-                        **common,
+                    return await complete(
+                        service.update_configuration(
+                            user,
+                            int(item.data["editing_profile_id"]),
+                            source_type=SourceType.DATABASE,
+                            database=database,
+                            files=None,
+                            enabled=bool(item.data["enabled"]),
+                            preserve_database_password=preserve_password,
+                            preserve_age_passphrase=preserve_age,
+                            **common,
+                        )
                     )
-                return await service.create_database_profile(user, database=database, **common)
+                return await complete(
+                    service.create_database_profile(user, database=database, **common)
+                )
             if item.data["source_type"] is SourceType.GITLAB:
                 gitlab = GitLabConfig(
                     item.data["gitlab_location"],
@@ -1424,37 +1445,42 @@ class WizardMixin(LanguageHelpMixin):
                     item.data.get("gitlab_remote_server_id"),
                 )
                 if "editing_profile_id" in item.data:
-                    return await service.update_configuration(
-                        user,
-                        int(item.data["editing_profile_id"]),
-                        source_type=SourceType.GITLAB,
-                        database=None,
-                        files=None,
-                        gitlab=gitlab,
-                        enabled=bool(item.data["enabled"]),
-                        preserve_age_passphrase=preserve_age,
-                        **common,
+                    return await complete(
+                        service.update_configuration(
+                            user,
+                            int(item.data["editing_profile_id"]),
+                            source_type=SourceType.GITLAB,
+                            database=None,
+                            files=None,
+                            gitlab=gitlab,
+                            enabled=bool(item.data["enabled"]),
+                            preserve_age_passphrase=preserve_age,
+                            **common,
+                        )
                     )
-                return await service.create_gitlab_profile(user, gitlab=gitlab, **common)
+                return await complete(service.create_gitlab_profile(user, gitlab=gitlab, **common))
             files = FilesConfig(
                 location=item.data["location"],
                 paths=item.data["paths"],
                 remote_server_id=item.data.get("remote_server_id"),
             )
             if "editing_profile_id" in item.data:
-                return await service.update_configuration(
-                    user,
-                    int(item.data["editing_profile_id"]),
-                    source_type=SourceType.FILES_DIRECTORIES,
-                    database=None,
-                    files=files,
-                    enabled=bool(item.data["enabled"]),
-                    preserve_age_passphrase=preserve_age,
-                    **common,
+                return await complete(
+                    service.update_configuration(
+                        user,
+                        int(item.data["editing_profile_id"]),
+                        source_type=SourceType.FILES_DIRECTORIES,
+                        database=None,
+                        files=files,
+                        enabled=bool(item.data["enabled"]),
+                        preserve_age_passphrase=preserve_age,
+                        **common,
+                    )
                 )
-            return await service.create_files_profile(user, files=files, **common)
+            return await complete(service.create_files_profile(user, files=files, **common))
         finally:
-            await self.fsm.secrets.clear(user.id)
+            if succeeded:
+                await self.fsm.secrets.clear(user.id)
 
     @staticmethod
     def _schedule_value(kind: ScheduleKind, text: str) -> ScheduleConfig:

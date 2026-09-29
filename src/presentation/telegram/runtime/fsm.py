@@ -139,6 +139,21 @@ class EphemeralSecretStore:
             finally:
                 item.erase()
 
+    async def get(self, user_id: int, name: str) -> str:
+        """Read a secret without consuming it so a failed save can be retried."""
+        async with self._lock:
+            item = self._items.get((user_id, name))
+            if item is None or item.expires_at <= monotonic():
+                if item is not None:
+                    self._items.pop((user_id, name), None)
+                    item.erase()
+                raise ValueError("conversation secret is unavailable or expired")
+            return self._cipher.decrypt(
+                item.nonce,
+                bytes(item.ciphertext),
+                self._context(user_id, name),
+            ).decode()
+
     async def touch(self, user_id: int) -> None:
         async with self._lock:
             expires_at = monotonic() + self.timeout

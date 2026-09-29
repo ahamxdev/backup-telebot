@@ -173,10 +173,13 @@ STRINGS: dict[str, str] = {
         "🔐 <b>Encryption:</b> {encryption}\n📋 <b>Profile Status:</b> {status}\n"
         "✅ <b>Enabled:</b> {enabled}\n━━━━━━━━━━━━━━\n👥 <b>Access:</b> {admins}\n━━━━━━━━━━━━━━"
     ),
-    "ask_backup_name": "Enter the backup name:",
-    "ask_edit_backup_name": "Enter the backup name, or send “-” to keep “{current}”:",
+    "ask_backup_name": "📦 <b>Backup Name</b>\nEnter a name for this backup profile.",
+    "ask_edit_backup_name": (
+        "📦 <b>Backup Name</b>\nEnter a new name, or send <code>-</code> to keep “{current}”."
+    ),
     "ask_edit_description": (
-        "Enter the description, send “-” to keep it, or send “!” to clear it:"
+        "📝 <b>Description</b>\nEnter a new description, send <code>-</code> to keep it, "
+        "or <code>!</code> to clear it."
     ),
     "ask_edit_database_" + "password": (
         "Enter a replacement database password, or send “-” to preserve the current password:"
@@ -185,8 +188,10 @@ STRINGS: dict[str, str] = {
         "Enter a replacement Age passphrase, or send “-” to preserve the current passphrase:"
     ),
     "edit_keep_hint": "During this edit, send “-” to preserve an existing non-secret value.",
-    "ask_description": "Enter a description, or send “-”:",
-    "choose_source": "Choose the source type:",
+    "ask_description": (
+        "📝 <b>Description</b>\nEnter a description, or send <code>-</code> to leave it empty."
+    ),
+    "choose_source": "🧩 <b>Source Type</b>\nChoose what you want to back up.",
     "source_database": "🗄 Database",
     "source_files_directories": "📁 Files & Directories",
     "source_gitlab": "🦊 GitLab",
@@ -290,12 +295,19 @@ STRINGS: dict[str, str] = {
     "ask_mssql_host_path": "Enter the corresponding remote-host mounted path:",
     "choose_location": "Choose the file/directory source location:",
     "ask_paths": "Enter one or more absolute file / directory paths, one per line:",
-    "choose_gitlab_location": "Where is GitLab running?",
-    "ask_gitlab_container": "Enter the GitLab Docker container name:",
-    "ask_gitlab_worker_path": "Enter the GitLab backup path visible inside the worker container:",
+    "choose_gitlab_location": "📍 <b>GitLab Location</b>\nWhere is this GitLab instance running?",
+    "ask_gitlab_container": "🐳 <b>GitLab Container</b>\nEnter the Docker container name.",
+    "ask_gitlab_worker_path": (
+        "📂 <b>GitLab Backup Directory</b>\nEnter the path visible inside the worker container."
+    ),
     "ask_gitlab_remote_path": (
-        "Enter the GitLab backup directory on the remote server "
-        "(for example, /opt/gitlab/data/backups):"
+        "📂 <b>GitLab Backup Directory</b>\nEnter the directory on the remote server "
+        "(for example, <code>/opt/gitlab/data/backups</code>)."
+    ),
+    "no_remote_servers_available": (
+        "⚠️ <b>No Remote Servers Available</b>\n"
+        "You do not have any enabled remote servers yet.\n"
+        "Add a remote server first, or choose Local Host."
     ),
     "gitlab_exclusive_warning": (
         "⚠️ GitLab backup directory is managed exclusively by this profile. Existing backup "
@@ -312,7 +324,7 @@ STRINGS: dict[str, str] = {
     "ask_schedule_daily": "Enter time as HH:MM:",
     "ask_schedule_weekly": "Enter weekday (0=Monday..6=Sunday) and time as: 0 HH:MM",
     "ask_schedule_monthly": "Enter day (1..28) and time as: 1 HH:MM",
-    "choose_remote_server": "Choose an enabled remote server:",
+    "choose_remote_server": "🌐 <b>Remote Server</b>\nChoose the server hosting this source.",
     "choose_assigned_admins": "Choose assigned admins, then Save Access:",
     "archive_explanation": (
         "📦 Archive Format\n\nAn archive groups files into one package. It does not "

@@ -84,7 +84,8 @@ def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
         container="gitlab",
         backup_path="/host/gitlab-backups",
     )
-    assert container_prompt == "Enter the GitLab Docker container name:"
+    assert container_prompt.startswith("🐳 <b>GitLab Container</b>")
+    assert "Docker container name" in container_prompt
     assert "gitlab_natrixo" not in container_prompt
     assert "host" not in path_prompt.lower()
     assert "worker container" in path_prompt.lower()
