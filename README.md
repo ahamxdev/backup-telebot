@@ -262,7 +262,11 @@ uv run backup-worker
 Local development can continue to use the default `sqlite+aiosqlite` URL. Production requires
 `postgresql+asyncpg`; Docker Compose constructs that URL from `POSTGRES_DB`, `POSTGRES_USER`,
 and `POSTGRES_PASSWORD`. Set a long, randomly generated password in `.env` before startup.
-The password is not present in Compose or source-controlled configuration.
+The password is not present in Compose or source-controlled configuration. `.env.example` is the
+configuration template: copy it to `.env`, then replace its empty credential placeholders. For a
+same-host production deployment, normally keep `WEBHOOK_HOST=127.0.0.1` and
+`WEBHOOK_PORT=8000`; both values are validated application settings, and ports outside 1-65535
+are rejected.
 
 Production Docker Compose runs a persistent PostgreSQL service, then a one-shot migration
 service followed by separate bot and worker services:
@@ -277,8 +281,12 @@ docker compose ps
 PostgreSQL data lives in the private `postgres_data` named volume. Compose bind-mounts the
 project's existing `.runtime` directory at `/data/runtime` only for work files, pending
 deliveries, and Telegram sessions. Application services wait for PostgreSQL health and the
-successful Alembic migration before starting. Run administrative commands with the same
-backend using `docker compose --profile tools run --rm cli <backupctl arguments>`.
+successful Alembic migration before starting. In production, both the bot and worker also execute
+an authenticated `SELECT 1` through their existing SQLAlchemy engine before Telegram startup or
+the scheduler loop. Keep a systemd `ExecStartPre` check using `pg_isready` when deploying without
+Compose; it remains a recommended operational check in addition to the application probe. Run
+administrative commands with the same backend using
+`docker compose --profile tools run --rm cli <backupctl arguments>`.
 
 On Linux, the worker maps `host.docker.internal` through Docker's `host-gateway`. Use that host
 name in PostgreSQL, MySQL/MariaDB, or MSSQL backup profiles when the database runs on the Docker

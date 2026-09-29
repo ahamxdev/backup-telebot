@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -34,6 +35,25 @@ def test_socks5_validation_and_auth() -> None:
 def test_production_requires_credentials() -> None:
     with pytest.raises(ValidationError):
         Settings(APP_ENV="production")
+
+
+def test_webhook_bind_defaults_and_port_validation() -> None:
+    settings = Settings(APP_ENV="test")
+
+    assert settings.WEBHOOK_HOST == "127.0.0.1"
+    assert settings.WEBHOOK_PORT == 8000
+    for invalid_port in (0, 65536):
+        with pytest.raises(ValidationError):
+            Settings(APP_ENV="test", WEBHOOK_PORT=invalid_port)
+
+
+def test_env_example_is_a_valid_settings_template() -> None:
+    template = Path(__file__).parents[2] / ".env.example"
+
+    settings = Settings(_env_file=template)
+
+    assert settings.WEBHOOK_HOST == "127.0.0.1"
+    assert settings.WEBHOOK_PORT == 8000
 
 
 @pytest.mark.parametrize(

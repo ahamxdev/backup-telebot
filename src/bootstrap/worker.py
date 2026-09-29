@@ -33,6 +33,8 @@ async def run_worker(settings: Settings) -> None:
     SecretCipher(key.get_secret_value())
     validation_database = Database(settings.DATABASE_URL)
     try:
+        if settings.APP_ENV == "production":
+            await validation_database.verify_postgresql_ready()
         async with validation_database.session_factory() as session:
             await validate_runtime_schema(session)
             await snapshot_legacy_active_runs(session)

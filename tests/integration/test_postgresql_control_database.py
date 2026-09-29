@@ -238,6 +238,7 @@ async def exercise_postgresql(sqlite_url: str, postgres_url: str, tmp_path: Path
 
     database = Database(postgres_url)
     try:
+        await database.verify_postgresql_ready()
         async with database.session_factory() as session:
             run = await session.get(BackupRun, 70)
             assert run is not None and run.created_at == fixed

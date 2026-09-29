@@ -22,11 +22,15 @@ def parse_superadmin_telegram_ids(value: str) -> tuple[int, ...]:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=True)
+    model_config = SettingsConfigDict(
+        env_file=".env", env_ignore_empty=True, extra="ignore", case_sensitive=True
+    )
 
     APP_ENV: Literal["development", "test", "production"] = "development"
     MASTER_ENCRYPTION_KEY_B64: SecretStr | None = None
     DATABASE_URL: str = "sqlite+aiosqlite:///./.runtime/data/app.sqlite3"
+    WEBHOOK_HOST: str = "127.0.0.1"
+    WEBHOOK_PORT: int = Field(default=8000, ge=1, le=65535)
     TELEGRAM_API_ID: int | None = None
     TELEGRAM_API_HASH: SecretStr | None = None
     TELEGRAM_BOT_TOKEN: SecretStr | None = None

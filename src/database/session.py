@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -47,6 +47,14 @@ class Database:
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self.session_factory() as session:
             yield session
+
+    async def verify_postgresql_ready(self) -> None:
+        """Verify that the configured PostgreSQL credentials can execute a query."""
+        try:
+            async with self.engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+        except Exception as exc:
+            raise RuntimeError("PostgreSQL startup readiness check failed") from exc
 
     async def dispose(self) -> None:
         await self.engine.dispose()
