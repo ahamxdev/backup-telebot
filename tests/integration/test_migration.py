@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import stat
@@ -76,7 +77,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         } <= run_columns
         run_indexes = {row[1] for row in connection.execute("PRAGMA index_list(backup_runs)")}
         assert "ix_backup_runs_failed_artifact_cleanup_at" in run_indexes
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0019",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
         gitlab_columns = {row[1] for row in connection.execute("PRAGMA table_info(gitlab_sources)")}
         assert "backup_path" in gitlab_columns
         assert "host_backup_path" not in gitlab_columns
@@ -124,6 +125,59 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         engine.dispose()
 
 
+def test_0020_repairs_only_verified_native_gitlab_sizes(tmp_path: Path) -> None:
+    database = tmp_path / "gitlab-size-repair.sqlite3"
+    _upgrade(database, "0019")
+    verified = {
+        "kind": "gitlab",
+        "location": "remote",
+        "native_filename": "171_gitlab_backup.tar",
+        "native_size": 640_174_080,
+        "native_sha256": "a" * 64,
+        "verified": True,
+    }
+    unverified = {**verified, "verified": False, "native_size": 111}
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            INSERT INTO users
+                (id, telegram_user_id, display_name, role, language_code, enabled,
+                 created_at, updated_at)
+            VALUES
+                (1, 7001, 'owner', 'SUPERADMIN', 'en', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO backup_profiles
+                (id, uuid, name, source_type, enabled, status, schedule_kind,
+                 compression_format, compression_preset, encryption_mode, created_by,
+                 created_at, updated_at)
+            VALUES
+                (1, '00000000-0000-4000-8000-000000007001', 'gitlab', 'GITLAB',
+                 1, 'DRAFT', 'MANUAL', 'NONE', NULL, 'NONE', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            """
+        )
+        rows = (
+            (1, "00000000-0000-4000-8000-000000007011", json.dumps(verified), None),
+            (2, "00000000-0000-4000-8000-000000007012", json.dumps(unverified), None),
+            (3, "00000000-0000-4000-8000-000000007013", json.dumps(verified), 123),
+        )
+        connection.executemany(
+            "INSERT INTO backup_runs "
+            "(id, uuid, profile_id, trigger, status, stage, cancel_requested, source_metadata, "
+            "original_size_bytes, created_at, updated_at) "
+            "VALUES (?, ?, 1, 'MANUAL', 'SUCCEEDED', 'COMPLETE', 0, ?, ?, "
+            "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            rows,
+        )
+
+    _upgrade(database, "head")
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT id, original_size_bytes FROM backup_runs ORDER BY id"
+        ).fetchall() == [(1, 640_174_080), (2, None), (3, 123)]
+
+
 def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Path) -> None:
     database = tmp_path / "previous-health-head.sqlite3"
     _upgrade(database, "0010")
@@ -137,7 +191,7 @@ def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Pa
         assert connection.execute("SELECT event_type FROM audit_events").fetchone() == (
             "preserved",
         )
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0019",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_heartbeats'"
         ).fetchone() == ("runtime_heartbeats",)
@@ -201,7 +255,7 @@ def test_historical_0017_gitlab_schema_is_reconciled_without_data_loss(tmp_path:
             "SELECT location, remote_server_id, container_name, backup_path "
             "FROM gitlab_sources WHERE profile_id = 1"
         ).fetchone() == ("LOCAL", None, "gitlab", "/worker/gitlab/backups")
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0019",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
 
 
 def test_disposable_0006_database_upgrades_to_0011_without_data_loss(tmp_path: Path) -> None:

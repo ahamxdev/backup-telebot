@@ -199,6 +199,18 @@ class PipelineRunner:
         if run.cancel_requested:
             raise asyncio.CancelledError
 
+    async def _persist_acquisition(
+        self, session: AsyncSession, run: BackupRun, source_metadata: dict[str, object], size: int
+    ) -> None:
+        """Durably record verified source facts before any transform can start."""
+        if type(size) is not int or size < 0:
+            raise RuntimeError("source acquisition did not report a valid logical size")
+        await self._ownership_boundary(session, run)
+        run.source_metadata = json.dumps(source_metadata, sort_keys=True)
+        run.original_size_bytes = size
+        run.stage = RunStage.VERIFY_SOURCE
+        await session.commit()
+
     async def _remove_run_workspace(self, run_uuid: str) -> None:
         stop = CooperativeStop()
         await run_cooperative_thread(
@@ -327,6 +339,10 @@ class PipelineRunner:
                 profile.database_source
                 and profile.database_source.artifact_remote_server_id is not None
             )
+            or (
+                profile.gitlab_source
+                and profile.gitlab_source.location is SourceLocation.REMOTE_SERVER
+            )
         )
         operation_id = uuid.uuid4().hex
         cleanup_record: MSSQLArtifactCleanup | None = None
@@ -386,10 +402,8 @@ class PipelineRunner:
             )
             if warning is not None:
                 source.metadata["server_artifact_cleanup_error"] = warning
-        run.source_metadata = json.dumps(source.metadata, sort_keys=True)
-        run.original_size_bytes = source.original_size_bytes
+        await self._persist_acquisition(session, run, source.metadata, source.original_size_bytes)
         check_processing_disk()
-        await self._stage(session, run, RunStage.VERIFY_SOURCE)
         if not source.path.is_file() or source.path.stat().st_size == 0:
             raise ValueError("source backup is empty")
         await self._stage(session, run, RunStage.COMPRESS)

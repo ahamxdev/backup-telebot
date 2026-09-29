@@ -1,3 +1,5 @@
+import hashlib
+import io
 import os
 import tarfile
 from datetime import UTC, datetime
@@ -22,6 +24,7 @@ from database.models import (
     BackupRun,
     FilesSource,
     GitLabSource,
+    RemoteServer,
     User,
 )
 from domain.enums import (
@@ -36,7 +39,9 @@ from domain.enums import (
     ScheduleKind,
     SourceLocation,
     SourceType,
+    SSHAuthenticationMethod,
 )
+from pipeline import worker as worker_provider
 from pipeline.acquisition import gitlab as gitlab_provider
 from pipeline.deadline import RunDeadline
 from pipeline.finalize import finalize_artifact
@@ -204,6 +209,136 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     assert all(expected_original in caption for caption in transport.captions)
     assert all("Final Backup Size:" in caption for caption in transport.captions)
     assert list(root.iterdir()) == []
+
+
+async def test_remote_gitlab_persists_verified_native_size_before_transforms(
+    database, session, settings, tmp_path: Path, monkeypatch
+) -> None:
+    key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    configured = settings.model_copy(
+        update={
+            "MASTER_ENCRYPTION_KEY_B64": SecretStr(key),
+            "MIN_FREE_DISK_BYTES": 0,
+        }
+    )
+    owner = User(telegram_user_id=211, display_name="root", role=Role.SUPERADMIN)
+    server = RemoteServer(
+        name="gitlab-host",
+        host="gitlab.example",
+        ssh_port=22,
+        ssh_username="backup",
+        authentication_method=SSHAuthenticationMethod.PRIVATE_KEY,
+        encrypted_private_key=b"encrypted-key",
+        encrypted_key_passphrase=None,
+        host_key_fingerprint="SHA256:trusted",
+        enabled=True,
+    )
+    session.add_all((owner, server))
+    await session.flush()
+    profile = await BackupService(session, SecretCipher(key)).create_gitlab_profile(
+        owner,
+        name="Remote GitLab E2E",
+        description=None,
+        gitlab=GitLabConfig(
+            SourceLocation.REMOTE_SERVER,
+            "gitlab",
+            "/opt/gitlab/data/backups",
+            server.id,
+        ),
+        schedule=ScheduleConfig(ScheduleKind.MANUAL),
+        compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
+        encryption=EncryptionConfig(EncryptionMode.NONE),
+        admin_ids=set(),
+    )
+    native_stream = io.BytesIO()
+    native_content = b"native-gitlab-data" * 4096
+    with tarfile.open(fileobj=native_stream, mode="w") as native:
+        entry = tarfile.TarInfo("repositories/data")
+        entry.size = len(native_content)
+        native.addfile(entry, io.BytesIO(native_content))
+    payload = native_stream.getvalue()
+    native_size = len(payload)
+    checksum = hashlib.sha256(payload).hexdigest()
+    state = gitlab_provider._FileState("300_gitlab_backup.tar", 30, native_size, 456)
+    snapshots = iter(({}, {state.name: state}))
+
+    class Connection:
+        def get_server_host_key(self) -> object:
+            return object()
+
+    class Context:
+        async def __aenter__(self) -> Connection:
+            return Connection()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class Gateway:
+        def pinned_connection(self, *_args: object, **_kwargs: object) -> Context:
+            return Context()
+
+    async def snapshot(*_args: object) -> dict[str, gitlab_provider._FileState]:
+        return next(snapshots)
+
+    async def stable(*_args: object) -> gitlab_provider._FileState:
+        return state
+
+    async def invoke(*_args: object) -> None:
+        return None
+
+    async def operation(
+        _connection: object,
+        operation_name: str,
+        _root: str,
+        _state: gitlab_provider._FileState | None,
+        _deadline: object,
+    ) -> str:
+        return checksum if operation_name == "hash" else ""
+
+    async def rsync(*args: object, **_kwargs: object) -> tuple[int, int]:
+        target = args[4]
+        assert isinstance(target, Path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
+        return native_size, 1
+
+    monkeypatch.setattr(gitlab_provider, "SSHGateway", lambda: Gateway())
+    monkeypatch.setattr(gitlab_provider, "_ssh_credentials", lambda *_args: object())
+    monkeypatch.setattr(gitlab_provider, "_remote_snapshot", snapshot)
+    monkeypatch.setattr(gitlab_provider, "_invoke_remote_backup", invoke)
+    monkeypatch.setattr(gitlab_provider, "_remote_stable_file", stable)
+    monkeypatch.setattr(gitlab_provider, "_remote_file_operation", operation)
+    monkeypatch.setattr(gitlab_provider, "_rsync_download", rsync)
+
+    original_create_archive = worker_provider.create_archive
+    persisted_before_transform: list[int | None] = []
+
+    async def assert_persisted_before_transform(*args: object, **kwargs: object) -> None:
+        async with database.session_factory() as verification_session:
+            stored = await verification_session.get(BackupRun, queued.run.id)
+            assert stored is not None
+            persisted_before_transform.append(stored.original_size_bytes)
+        await original_create_archive(*args, **kwargs)
+
+    monkeypatch.setattr(worker_provider, "create_archive", assert_persisted_before_transform)
+    queued = await RunService(session).enqueue_manual(owner, profile.id)
+    claimed = await RunService(session).claim("remote-gitlab-worker", 120, (RunStatus.QUEUED,))
+    assert claimed is not None
+    transport = SuccessfulTransport()
+
+    await PipelineRunner(
+        database.session_factory, configured, transport, "remote-gitlab-worker"
+    ).execute(queued.run.id)
+
+    await session.refresh(queued.run)
+    assert persisted_before_transform == [native_size]
+    assert queued.run.status is RunStatus.SUCCEEDED, queued.run.error_message
+    assert queued.run.original_size_bytes == native_size
+    assert queued.run.final_size_bytes is not None
+    assert queued.run.final_size_bytes < native_size
+    expected_original = f"{native_size / 1024:.2f} KiB"
+    assert all(expected_original in caption for caption in transport.captions)
+    assert all("Final Backup Size:" in caption for caption in transport.captions)
 
 
 async def test_finalized_recovery_restores_original_size_from_manifest(

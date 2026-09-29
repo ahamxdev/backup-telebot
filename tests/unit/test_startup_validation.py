@@ -115,4 +115,4 @@ async def test_startup_validation_names_only_missing_configured_tools(
 
 
 def test_migration_head_is_resolved_from_flat_source_layout() -> None:
-    assert migration_head() == "0019"
+    assert migration_head() == "0020"
