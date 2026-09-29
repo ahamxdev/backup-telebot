@@ -14,7 +14,6 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -268,17 +267,30 @@ class FilesSource(Base):
 class GitLabSource(Base):
     __tablename__ = "gitlab_sources"
     __table_args__ = (
-        UniqueConstraint("worker_backup_path", name="uq_gitlab_sources_worker_root"),
+        CheckConstraint(
+            "location IN ('LOCAL', 'REMOTE_SERVER')",
+            name="ck_gitlab_sources_location",
+        ),
+        CheckConstraint(
+            "(location = 'LOCAL' AND remote_server_id IS NULL) OR "
+            "(location = 'REMOTE_SERVER' AND remote_server_id IS NOT NULL)",
+            name="ck_gitlab_sources_remote_consistency",
+        ),
         CheckConstraint("length(container_name) BETWEEN 1 AND 128", name="ck_gitlab_container"),
-        CheckConstraint("length(worker_backup_path) > 1", name="ck_gitlab_worker_path"),
+        CheckConstraint("length(backup_path) > 1", name="ck_gitlab_backup_path"),
     )
 
     profile_id: Mapped[int] = mapped_column(
         ForeignKey("backup_profiles.id", ondelete="CASCADE"), primary_key=True
     )
+    location: Mapped[SourceLocation] = mapped_column(Enum(SourceLocation, native_enum=False))
+    remote_server_id: Mapped[int | None] = mapped_column(
+        ForeignKey("remote_servers.id", ondelete="RESTRICT")
+    )
     container_name: Mapped[str] = mapped_column(String(128))
-    worker_backup_path: Mapped[str] = mapped_column(String(1024))
+    backup_path: Mapped[str] = mapped_column(String(1024))
     profile: Mapped[BackupProfile] = relationship(back_populates="gitlab_source")
+    remote_server: Mapped[RemoteServer | None] = relationship()
 
 
 class BackupPath(Base):

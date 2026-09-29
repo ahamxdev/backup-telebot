@@ -62,12 +62,12 @@ class BackupService:
 
     def _validate_gitlab(self, gitlab: GitLabConfig) -> None:
         gitlab.validate()
-        if self.allowed_local_roots is not None:
+        if gitlab.location is SourceLocation.LOCAL and self.allowed_local_roots is not None:
             LocalSourcePathMapper(
                 self.allowed_local_roots,
                 self.denied_local_roots,
                 self.local_source_mounts,
-            ).validate_container_path(gitlab.worker_backup_path)
+            ).validate_container_path(gitlab.backup_path)
 
     def _persisted_file_paths(self, files: FilesConfig) -> tuple[str, ...]:
         if files.location is not SourceLocation.LOCAL or self.allowed_local_roots is None:
@@ -163,6 +163,12 @@ class BackupService:
     ) -> BackupProfile:
         AdminService.require_superadmin(actor)
         self._validate_gitlab(gitlab)
+        if gitlab.remote_server_id is not None:
+            server = await RemoteServerRepository(self.session).active_by_id(
+                gitlab.remote_server_id
+            )
+            if not server.enabled:
+                raise ValueError("remote server must be enabled")
         await self._validate_gitlab_root_available(gitlab)
         return await self._create_configured(
             actor,
@@ -272,8 +278,10 @@ class BackupService:
             )
         if gitlab is not None:
             profile.gitlab_source = GitLabSource(
+                location=gitlab.location,
+                remote_server_id=gitlab.remote_server_id,
                 container_name=gitlab.container_name.strip(),
-                worker_backup_path=gitlab.worker_backup_path.strip(),
+                backup_path=gitlab.backup_path.strip(),
             )
         await self.session.flush()
         await AccessRepository(self.session).replace_for_profile(profile.id, admin_ids, actor.id)
@@ -436,6 +444,12 @@ class BackupService:
                     raise ValueError("remote server must be enabled")
         if gitlab is not None:
             self._validate_gitlab(gitlab)
+            if gitlab.remote_server_id is not None:
+                server = await RemoteServerRepository(self.session).active_by_id(
+                    gitlab.remote_server_id
+                )
+                if not server.enabled:
+                    raise ValueError("remote server must be enabled")
             await self._validate_gitlab_root_available(gitlab, exclude_profile_id=profile.id)
         if preserve_age_passphrase and (
             encryption.mode is not EncryptionMode.AGE_PASSPHRASE or old_age_secret is None
@@ -523,8 +537,10 @@ class BackupService:
             )
         elif gitlab is not None:
             profile.gitlab_source = GitLabSource(
+                location=gitlab.location,
+                remote_server_id=gitlab.remote_server_id,
                 container_name=gitlab.container_name.strip(),
-                worker_backup_path=gitlab.worker_backup_path.strip(),
+                backup_path=gitlab.backup_path.strip(),
             )
         else:
             raise ValueError("source configuration is required")
@@ -577,7 +593,11 @@ class BackupService:
             .join(BackupProfile)
             .where(
                 BackupProfile.archived_at.is_(None),
-                GitLabSource.worker_backup_path == gitlab.worker_backup_path,
+                GitLabSource.location == gitlab.location,
+                GitLabSource.remote_server_id.is_(gitlab.remote_server_id)
+                if gitlab.remote_server_id is None
+                else GitLabSource.remote_server_id == gitlab.remote_server_id,
+                GitLabSource.backup_path == gitlab.backup_path,
             )
         )
         if exclude_profile_id is not None:

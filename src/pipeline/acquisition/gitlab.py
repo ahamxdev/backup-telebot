@@ -1,24 +1,41 @@
-"""Acquire one native GitLab backup from an operator-configured bind mount."""
+"""Acquire one native GitLab backup from a local bind mount or trusted remote host."""
 
 import asyncio
+import base64
 import fcntl
 import hashlib
 import json
 import os
+import shlex
+import shutil
 import stat
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
-from application.profile_config import GitLabConfig, LocalSourcePathMapper
+import asyncssh
+
+from application.profile_config import (
+    GitLabConfig,
+    LocalSourcePathMapper,
+    validate_docker_container_name,
+)
 from config.settings import Settings
 from database.models import GitLabSource
-from pipeline.acquisition.common import SourceArtifact
+from domain.enums import SourceLocation
+from infrastructure.ssh import HostKeyChangedError, SSHConnectionTimeout, SSHGateway
+from pipeline.acquisition.common import SourceArtifact, SourceBudget
+from pipeline.acquisition.remote_files import (
+    _rsync_download,
+    _ssh_credentials,
+    _validate_remote_path,
+)
 from pipeline.deadline import RunDeadline
 from pipeline.errors import PipelineError
+from security import SecretCipher
 
 _SUFFIX = "_gitlab_backup.tar"
 
@@ -32,13 +49,13 @@ class _FileState:
 
 
 def _approved_root(source: GitLabSource, settings: Settings) -> Path:
-    GitLabConfig(source.container_name, source.worker_backup_path).validate()
+    GitLabConfig(source.location, source.container_name, source.backup_path).validate()
     LocalSourcePathMapper(
         settings.allowed_source_roots(),
         settings.denied_source_roots(),
         settings.local_source_mounts(),
-    ).validate_container_path(source.worker_backup_path)
-    root = Path(source.worker_backup_path)
+    ).validate_container_path(source.backup_path)
+    root = Path(source.backup_path)
     try:
         resolved = root.resolve(strict=True)
     except OSError as exc:
@@ -235,7 +252,7 @@ def _exclusive_lock(settings: Settings) -> Iterator[None]:
         yield
 
 
-async def acquire_gitlab(
+async def _acquire_local_gitlab(
     source: GitLabSource,
     destination: Path,
     settings: Settings,
@@ -268,3 +285,256 @@ async def acquire_gitlab(
             "verified": True,
         },
     )
+
+
+_REMOTE_FILE_SCRIPT = """
+import hashlib,json,os,stat,sys
+operation,root=sys.argv[1:3]
+suffix='_gitlab_backup.tar'
+rootfd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+try:
+    if operation == 'snapshot':
+        result=[]
+        with os.scandir(rootfd) as entries:
+            for entry in entries:
+                info=entry.stat(follow_symlinks=False)
+                if entry.name.endswith(suffix) and stat.S_ISREG(info.st_mode):
+                    result.append([entry.name,info.st_ino,info.st_size,info.st_mtime_ns])
+        print(json.dumps(result,separators=(',',':')))
+    else:
+        name,inode,size,mtime=sys.argv[3:7]
+        if '/' in name or name in {'.','..'} or not name.endswith(suffix):
+            raise ValueError('unsafe GitLab artifact name')
+        expected=(int(inode),int(size),int(mtime))
+        descriptor=os.open(name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=rootfd)
+        try:
+            info=os.fstat(descriptor)
+            actual=(info.st_ino,info.st_size,info.st_mtime_ns)
+            if not stat.S_ISREG(info.st_mode) or actual != expected:
+                raise RuntimeError('GitLab artifact changed')
+            if operation == 'hash':
+                digest=hashlib.sha256()
+                while chunk := os.read(descriptor,1024*1024): digest.update(chunk)
+                print(digest.hexdigest())
+            elif operation == 'unlink':
+                current=os.stat(name,dir_fd=rootfd,follow_symlinks=False)
+                actual=(current.st_ino,current.st_size,current.st_mtime_ns)
+                if not stat.S_ISREG(current.st_mode) or actual != expected:
+                    raise RuntimeError('GitLab artifact changed')
+                os.unlink(name,dir_fd=rootfd)
+            else:
+                raise ValueError('invalid operation')
+        finally:
+            os.close(descriptor)
+finally:
+    os.close(rootfd)
+""".strip()
+
+
+async def _remote_file_operation(
+    connection: asyncssh.SSHClientConnection,
+    operation: str,
+    root: str,
+    state: _FileState | None,
+    deadline: RunDeadline | None,
+) -> str:
+    encoded = base64.b64encode(_REMOTE_FILE_SCRIPT.encode()).decode()
+    launcher = "import base64;exec(base64.b64decode(" + repr(encoded) + ").decode())"
+    arguments = ["/usr/bin/python3", "-c", launcher, operation, root]
+    if state is not None:
+        arguments.extend([state.name, str(state.inode), str(state.size), str(state.mtime_ns)])
+    timeout = deadline.operation_timeout(3600) if deadline is not None else 3600
+    try:
+        result = await connection.run(shlex.join(arguments), check=True, timeout=timeout)
+    except (OSError, asyncssh.Error, TimeoutError) as exc:
+        if deadline is not None:
+            deadline.check()
+        raise PipelineError(
+            "GITLAB_REMOTE_OPERATION_FAILED", "remote GitLab artifact operation failed"
+        ) from exc
+    return result.stdout.strip() if isinstance(result.stdout, str) else ""
+
+
+async def _remote_snapshot(
+    connection: asyncssh.SSHClientConnection,
+    root: str,
+    deadline: RunDeadline | None,
+) -> dict[str, _FileState]:
+    raw = await _remote_file_operation(connection, "snapshot", root, None, deadline)
+    try:
+        items = json.loads(raw)
+        states = {
+            str(item[0]): _FileState(str(item[0]), int(item[1]), int(item[2]), int(item[3]))
+            for item in items
+        }
+    except (TypeError, ValueError, json.JSONDecodeError, IndexError) as exc:
+        raise PipelineError(
+            "GITLAB_REMOTE_OPERATION_FAILED", "remote GitLab artifact listing was invalid"
+        ) from exc
+    if len(states) != len(items):
+        raise PipelineError("GITLAB_ARTIFACT_AMBIGUOUS", "duplicate GitLab artifact names")
+    return states
+
+
+async def _remote_stable_file(
+    connection: asyncssh.SSHClientConnection,
+    root: str,
+    expected: _FileState,
+    settings: Settings,
+    deadline: RunDeadline | None,
+) -> _FileState:
+    previous: _FileState | None = None
+    stable = 0
+    while stable < settings.GITLAB_STABILITY_CHECKS:
+        current = (await _remote_snapshot(connection, root, deadline)).get(expected.name)
+        if current is None or current.size <= 0:
+            raise PipelineError("GITLAB_ARTIFACT_INVALID", "GitLab artifact disappeared")
+        stable = stable + 1 if current == previous else 1
+        previous = current
+        if stable < settings.GITLAB_STABILITY_CHECKS:
+            await asyncio.sleep(settings.GITLAB_STABILITY_INTERVAL_SECONDS)
+    if current is None:
+        raise PipelineError("GITLAB_ARTIFACT_INVALID", "GitLab artifact is unavailable")
+    return current
+
+
+def _hash_file(path: Path) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise PipelineError("GITLAB_ACQUISITION_FAILED", "acquired artifact is not a file")
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        return info.st_size, digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+async def _invoke_remote_backup(
+    connection: asyncssh.SSHClientConnection,
+    container_name: str,
+    deadline: RunDeadline | None,
+) -> None:
+    # container_name has already passed the strict allowlist validator. No user-provided
+    # command or option is accepted here.
+    container_name = validate_docker_container_name(container_name)
+    command = shlex.join(("docker", "exec", "-t", container_name, "gitlab-backup", "create"))
+    timeout = deadline.operation_timeout(3600) if deadline is not None else 3600
+    try:
+        await connection.run(command, check=True, timeout=timeout)
+    except (OSError, asyncssh.Error, TimeoutError) as exc:
+        if deadline is not None:
+            deadline.check()
+        raise PipelineError("GITLAB_BACKUP_FAILED", "native GitLab backup command failed") from exc
+
+
+async def _acquire_remote_gitlab(
+    source: GitLabSource,
+    destination: Path,
+    settings: Settings,
+    cipher: SecretCipher,
+    deadline: RunDeadline | None,
+) -> SourceArtifact:
+    GitLabConfig(
+        source.location, source.container_name, source.backup_path, source.remote_server_id
+    ).validate()
+    root = _validate_remote_path(source.backup_path)
+    if root == "/" or PurePosixPath(root).name in {".", ".."}:
+        raise PipelineError("GITLAB_ROOT_INVALID", "remote GitLab backup root is unsafe")
+    server = source.remote_server
+    if server is None or not server.enabled or server.id != source.remote_server_id:
+        raise PipelineError("INVALID_PROFILE", "enabled remote server is missing")
+    credentials = _ssh_credentials(server, cipher)
+    material = destination.parent / "gitlab-ssh-material"
+    material.mkdir(mode=0o700, parents=True)
+    target = destination.with_suffix(".gitlab.tar")
+    budget = SourceBudget(settings, destination.parent, deadline=deadline)
+    try:
+        connect_timeout = deadline.operation_timeout(30) if deadline is not None else 30
+        try:
+            context = SSHGateway().pinned_connection(
+                credentials,
+                server.host_key_fingerprint,
+                connect_timeout=connect_timeout,
+            )
+            connection = await context.__aenter__()
+        except SSHConnectionTimeout as exc:
+            raise PipelineError("SSH_CONNECT_TIMEOUT", "SSH connection timed out") from exc
+        except asyncssh.PermissionDenied as exc:
+            raise PipelineError(
+                "REMOTE_AUTHENTICATION_FAILED", "remote SSH authentication failed"
+            ) from exc
+        except HostKeyChangedError as exc:
+            raise PipelineError(
+                "REMOTE_HOST_KEY_MISMATCH", "remote SSH host key verification failed"
+            ) from exc
+        try:
+            host_key = connection.get_server_host_key()
+            if host_key is None:
+                raise PipelineError("SSH_HOST_KEY_MISSING", "SSH server key is unavailable")
+            before = await _remote_snapshot(connection, root, deadline)
+            await _invoke_remote_backup(connection, source.container_name, deadline)
+            detected = detect_new_backup(
+                before,
+                await _remote_snapshot(connection, root, deadline),
+                0,
+            )
+            stable = await _remote_stable_file(connection, root, detected, settings, deadline)
+            remote_path = str(PurePosixPath(root) / stable.name)
+            remote_checksum = await _remote_file_operation(
+                connection, "hash", root, stable, deadline
+            )
+            await _rsync_download(
+                server,
+                credentials,
+                host_key,
+                remote_path,
+                target,
+                material,
+                budget,
+                deadline,
+            )
+            size, checksum = await asyncio.to_thread(_hash_file, target)
+            if size != stable.size or checksum != remote_checksum:
+                target.unlink(missing_ok=True)
+                raise PipelineError(
+                    "GITLAB_ACQUISITION_FAILED", "GitLab artifact transfer failed validation"
+                )
+            # Re-verify the remote inode and metadata immediately before deleting it. This
+            # operation is reached only after the local size and SHA-256 checks succeed.
+            await _remote_file_operation(connection, "unlink", root, stable, deadline)
+        finally:
+            await context.__aexit__(None, None, None)
+    finally:
+        shutil.rmtree(material, ignore_errors=True)
+    return SourceArtifact(
+        target,
+        ".gitlab.tar",
+        {
+            "kind": "gitlab",
+            "location": "remote",
+            "native_filename": stable.name,
+            "native_size": size,
+            "native_sha256": checksum,
+            "source_cleanup": "succeeded",
+            "verified": True,
+        },
+    )
+
+
+async def acquire_gitlab(
+    source: GitLabSource,
+    destination: Path,
+    settings: Settings,
+    deadline: RunDeadline | None,
+    cipher: SecretCipher | None = None,
+) -> SourceArtifact:
+    if source.location is SourceLocation.REMOTE_SERVER:
+        if cipher is None:
+            raise PipelineError("INVALID_PROFILE", "secret cipher is unavailable")
+        return await _acquire_remote_gitlab(source, destination, settings, cipher, deadline)
+    if source.location is not SourceLocation.LOCAL:
+        raise PipelineError("INVALID_PROFILE", "GitLab source location is invalid")
+    return await _acquire_local_gitlab(source, destination, settings, deadline)

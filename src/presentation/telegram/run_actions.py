@@ -180,11 +180,17 @@ class RunActionsMixin(BackupProfilesMixin):
                 engine=self._engine_label(user.language_code, profile.database_source.engine),
             )
         elif profile.gitlab_source is not None:
+            location_key = (
+                "source_location_local"
+                if profile.gitlab_source.location is SourceLocation.LOCAL
+                else "source_location_remote"
+            )
             source_specific = t(
                 user.language_code,
                 "gitlab_source_details",
+                location=t(user.language_code, location_key),
                 container=code(profile.gitlab_source.container_name),
-                worker_path=code(profile.gitlab_source.worker_backup_path),
+                backup_path=code(profile.gitlab_source.backup_path),
             )
         source_details = t(
             user.language_code,

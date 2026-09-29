@@ -20,6 +20,7 @@ from database.models import (
     BackupRun,
     DatabaseSource,
     FilesSource,
+    GitLabSource,
     MSSQLArtifactCleanup,
     SystemSettings,
     utc_now,
@@ -167,6 +168,9 @@ class PipelineRunner:
                 .selectinload(BackupProfile.files_source)
                 .selectinload(FilesSource.paths),
                 selectinload(BackupRun.profile).selectinload(BackupProfile.gitlab_source),
+                selectinload(BackupRun.profile)
+                .selectinload(BackupProfile.gitlab_source)
+                .selectinload(GitLabSource.remote_server),
             )
         )
         if run is None:

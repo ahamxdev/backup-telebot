@@ -389,14 +389,20 @@ class FilesConfig:
 
 @dataclass(frozen=True)
 class GitLabConfig:
+    location: SourceLocation
     container_name: str
-    worker_backup_path: str
+    backup_path: str
+    remote_server_id: int | None = None
 
     def validate(self) -> "GitLabConfig":
         validate_docker_container_name(self.container_name)
-        worker = validate_absolute_path(self.worker_backup_path)
-        if worker == "/":
+        path = validate_absolute_path(self.backup_path)
+        if path == "/":
             raise ValueError("GitLab backup root cannot be filesystem root")
+        if self.location is SourceLocation.REMOTE_SERVER and self.remote_server_id is None:
+            raise ValueError("remote GitLab sources require a remote server")
+        if self.location is SourceLocation.LOCAL and self.remote_server_id is not None:
+            raise ValueError("local GitLab sources cannot reference a remote server")
         return self
 
 

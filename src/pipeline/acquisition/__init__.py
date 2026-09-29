@@ -265,7 +265,7 @@ async def acquire(
     if profile.source_type is SourceType.GITLAB:
         if profile.gitlab_source is None:
             raise PipelineError("INVALID_PROFILE", "GitLab source is missing")
-        return await acquire_gitlab(profile.gitlab_source, destination, settings, deadline)
+        return await acquire_gitlab(profile.gitlab_source, destination, settings, deadline, cipher)
     if profile.source_type is SourceType.FILES_DIRECTORIES:
         path = destination.with_suffix(".tar")
         if profile.files_source and profile.files_source.location is SourceLocation.REMOTE_SERVER:

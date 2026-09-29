@@ -19,6 +19,7 @@ from database.models import (
     BackupRun,
     DatabaseSource,
     FilesSource,
+    GitLabSource,
     User,
     utc_now,
 )
@@ -128,7 +129,7 @@ class RunService:
                 ),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.remote_server),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.paths),
-                selectinload(BackupProfile.gitlab_source),
+                selectinload(BackupProfile.gitlab_source).selectinload(GitLabSource.remote_server),
             )
             .with_for_update()
         )
@@ -139,6 +140,8 @@ class RunService:
             remote_server = profile.database_source.artifact_remote_server
         elif profile.files_source is not None:
             remote_server = profile.files_source.remote_server
+        elif profile.gitlab_source is not None:
+            remote_server = profile.gitlab_source.remote_server
         if remote_server is not None:
             await self.session.refresh(remote_server, with_for_update=True)
         assigned_admin_ids = set(

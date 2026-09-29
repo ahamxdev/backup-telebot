@@ -154,7 +154,7 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
         owner,
         name="GitLab E2E",
         description=None,
-        gitlab=GitLabConfig("gitlab", str(root)),
+        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab", str(root)),
         schedule=ScheduleConfig(ScheduleKind.MANUAL),
         compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
         encryption=EncryptionConfig(EncryptionMode.AGE_PASSPHRASE, passphrase="strong secret"),

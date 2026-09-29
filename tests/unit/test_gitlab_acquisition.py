@@ -1,5 +1,8 @@
+import hashlib
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -9,7 +12,8 @@ from application.profile_config import (
     validate_docker_container_name,
 )
 from config.settings import Settings
-from database.models import GitLabSource
+from database.models import GitLabSource, RemoteServer
+from domain.enums import SourceLocation, SSHAuthenticationMethod
 from pipeline.acquisition import gitlab as provider
 from pipeline.errors import PipelineError
 
@@ -29,8 +33,9 @@ def _settings(tmp_path: Path) -> tuple[Settings, Path]:
 
 def _source(root: Path) -> GitLabSource:
     return GitLabSource(
+        location=SourceLocation.LOCAL,
         container_name="gitlab_natrixo",
-        worker_backup_path=str(root),
+        backup_path=str(root),
     )
 
 
@@ -53,7 +58,7 @@ def test_container_name_validation_rejects_unsafe_names(value: str) -> None:
 
 def test_profile_path_is_worker_visible_and_confined_to_configured_mounts(tmp_path: Path) -> None:
     settings, root = _settings(tmp_path)
-    GitLabConfig("gitlab", str(root)).validate()
+    GitLabConfig(SourceLocation.LOCAL, "gitlab", str(root)).validate()
     mapper = LocalSourcePathMapper(
         settings.allowed_source_roots(),
         settings.denied_source_roots(),
@@ -63,7 +68,7 @@ def test_profile_path_is_worker_visible_and_confined_to_configured_mounts(tmp_pa
     with pytest.raises(ValueError, match="container root"):
         mapper.validate_container_path("/unapproved/gitlab")
     with pytest.raises(ValueError, match="filesystem root"):
-        GitLabConfig("gitlab", "/").validate()
+        GitLabConfig(SourceLocation.LOCAL, "gitlab", "/").validate()
 
 
 def test_pre_run_cleanup_is_confined_and_rejects_symlinks(tmp_path: Path) -> None:
@@ -221,3 +226,144 @@ def test_helper_uses_only_fixed_gitlab_command(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(gitlab_helper.docker, "from_env", lambda: Client())
     assert gitlab_helper._run_gitlab_backup("gitlab_natrixo") == (0, "ok")
     assert calls == [(["gitlab-backup", "create"], True, False)]
+
+
+@pytest.mark.asyncio
+async def test_remote_backup_command_is_fixed_and_container_is_data() -> None:
+    commands: list[str] = []
+
+    class Connection:
+        async def run(self, command: str, **kwargs: object) -> SimpleNamespace:
+            commands.append(command)
+            assert kwargs["check"] is True
+            return SimpleNamespace(stdout="", exit_status=0)
+
+    await provider._invoke_remote_backup(cast(Any, Connection()), "gitlab_primary", None)
+    assert commands == ["docker exec -t gitlab_primary gitlab-backup create"]
+    with pytest.raises(ValueError, match="container name"):
+        await provider._invoke_remote_backup(cast(Any, Connection()), "gitlab; id", None)
+    assert commands == ["docker exec -t gitlab_primary gitlab-backup create"]
+
+
+@pytest.mark.asyncio
+async def test_remote_acquisition_rsyncs_verifies_then_deletes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = b"remote-native-gitlab-backup"
+    checksum = hashlib.sha256(payload).hexdigest()
+    state = provider._FileState("171_gitlab_backup.tar", 17, len(payload), 123)
+    server = RemoteServer(
+        id=9,
+        name="gitlab-host",
+        host="gitlab.example",
+        ssh_port=22,
+        ssh_username="backup",
+        authentication_method=SSHAuthenticationMethod.PRIVATE_KEY,
+        encrypted_private_key=b"encrypted",
+        encrypted_key_passphrase=None,
+        host_key_fingerprint="SHA256:trusted",
+        enabled=True,
+    )
+    source = GitLabSource(
+        location=SourceLocation.REMOTE_SERVER,
+        remote_server_id=server.id,
+        remote_server=server,
+        container_name="gitlab",
+        backup_path="/opt/gitlab/data/backups",
+    )
+    settings, _root = _settings(tmp_path)
+    settings.MIN_FREE_DISK_BYTES = 0
+    events: list[str] = []
+    snapshots = iter(({}, {state.name: state}))
+
+    class Connection:
+        def get_server_host_key(self) -> object:
+            return object()
+
+    class Context:
+        async def __aenter__(self) -> Connection:
+            return Connection()
+
+        async def __aexit__(self, *_args: object) -> None:
+            events.append("disconnect")
+
+    class Gateway:
+        def pinned_connection(self, *_args: object, **_kwargs: object) -> Context:
+            return Context()
+
+    async def snapshot(*_args: object) -> dict[str, provider._FileState]:
+        return next(snapshots)
+
+    async def invoke(*_args: object) -> None:
+        events.append("backup")
+
+    async def stable(*_args: object) -> provider._FileState:
+        return state
+
+    async def operation(
+        _connection: object,
+        operation_name: str,
+        _root_path: str,
+        operation_state: provider._FileState | None,
+        _deadline: object,
+    ) -> str:
+        assert operation_state == state
+        events.append(operation_name)
+        return checksum if operation_name == "hash" else ""
+
+    async def rsync(
+        _server: object,
+        _credentials: object,
+        _host_key: object,
+        remote: str,
+        local: Path,
+        _material: Path,
+        _budget: object,
+        _deadline: object,
+    ) -> tuple[int, int]:
+        assert remote == "/opt/gitlab/data/backups/171_gitlab_backup.tar"
+        events.append("rsync")
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(payload)  # noqa: ASYNC240
+        return len(payload), 1
+
+    monkeypatch.setattr(provider, "SSHGateway", lambda: Gateway())
+    monkeypatch.setattr(provider, "_ssh_credentials", lambda *_args: object())
+    monkeypatch.setattr(provider, "_remote_snapshot", snapshot)
+    monkeypatch.setattr(provider, "_invoke_remote_backup", invoke)
+    monkeypatch.setattr(provider, "_remote_stable_file", stable)
+    monkeypatch.setattr(provider, "_remote_file_operation", operation)
+    monkeypatch.setattr(provider, "_rsync_download", rsync)
+
+    artifact = await provider.acquire_gitlab(
+        source,
+        tmp_path / "workspace" / "source",
+        settings,
+        None,
+        cast(Any, object()),
+    )
+
+    assert artifact.path.read_bytes() == payload
+    assert artifact.metadata["native_sha256"] == checksum
+    assert events == ["backup", "hash", "rsync", "unlink", "disconnect"]
+
+    async def corrupt_rsync(*args: object, **_kwargs: object) -> tuple[int, int]:
+        local = cast(Path, args[4])
+        events.append("rsync")
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(b"corrupt")
+        return 7, 1
+
+    snapshots = iter(({}, {state.name: state}))
+    events.clear()
+    monkeypatch.setattr(provider, "_rsync_download", corrupt_rsync)
+    with pytest.raises(PipelineError, match="transfer failed validation"):
+        await provider.acquire_gitlab(
+            source,
+            tmp_path / "failed-workspace" / "source",
+            settings,
+            None,
+            cast(Any, object()),
+        )
+    assert "unlink" not in events
+    assert events == ["backup", "hash", "rsync", "disconnect"]

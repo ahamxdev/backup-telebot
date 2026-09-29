@@ -26,6 +26,8 @@ def test_docker_deployment_security_and_tools() -> None:
     assert not (root / "compose.gitlab-local.yml").exists()
     assert "/var/run/docker.sock:/var/run/docker.sock" in helper
     assert 'command: ["backup-gitlab-helper"]' in helper
+    assert 'profiles: ["local-gitlab"]' in helper
+    assert "gitlab-helper:" not in worker.split("depends_on:", 1)[1].split("command:", 1)[0]
     assert 'cap_drop: ["ALL"]' in compose
     assert "source: ./.runtime" in compose
     assert "target: /data/runtime" in compose

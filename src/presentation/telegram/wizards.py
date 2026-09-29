@@ -255,8 +255,8 @@ class WizardMixin(LanguageHelpMixin):
                     await self.fsm.transition(user.id, state, State.ADD_BACKUP_FILES_LOCATION)
                     await self._send(user, "choose_location", buttons=locations(language))
                 else:
-                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_CONTAINER)
-                    await self._send(user, "ask_gitlab_container", buttons=cancel_back(language))
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_LOCATION)
+                    await self._send(user, "choose_gitlab_location", buttons=locations(language))
             elif state is State.ADD_BACKUP_DATABASE_ENGINE:
                 engine = ENGINE_ACTIONS.get(action or "")
                 if engine is None:
@@ -403,26 +403,86 @@ class WizardMixin(LanguageHelpMixin):
                     item.data["location"], item.data["paths"], item.data.get("remote_server_id")
                 ).validate()
                 await self._advance_to_schedule(session, user, item, state)
+            elif state is State.ADD_BACKUP_GITLAB_LOCATION:
+                if action not in {"location_local", "location_remote"}:
+                    raise ValueError("invalid location")
+                item.data["gitlab_location"] = (
+                    SourceLocation.LOCAL
+                    if action == "location_local"
+                    else SourceLocation.REMOTE_SERVER
+                )
+                item.data.pop("gitlab_remote_server_id", None)
+                item.data.pop("remote_server_name", None)
+                if item.data["gitlab_location"] is SourceLocation.LOCAL:
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_CONTAINER)
+                    await self._send(user, "ask_gitlab_container", buttons=cancel_back(language))
+                else:
+                    servers = await RemoteServerRepository(session).list_active(enabled_only=True)
+                    if not servers:
+                        raise ValueError("no enabled remote server")
+                    item.option_ids = {
+                        f"🖥 {server.name} · {index}": server.id
+                        for index, server in enumerate(servers, 1)
+                    }
+                    item.data.update(
+                        {"page": 0, "view": "selection", "prompt": "choose_remote_server"}
+                    )
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_SERVER)
+                    await self._render_selection(user, item)
+            elif state is State.ADD_BACKUP_GITLAB_SERVER:
+                server_id = self._selected_id(item, text)
+                server = await RemoteServerRepository(session).active_by_id(server_id)
+                item.data["gitlab_remote_server_id"] = server_id
+                item.data["remote_server_name"] = server.name
+                item.option_ids.clear()
+                await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_CONTAINER)
+                await self._send(user, "ask_gitlab_container", buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_GITLAB_CONTAINER:
                 if text == "-" and item.data.get("original_source_type") is SourceType.GITLAB:
                     text = str(item.data["existing_gitlab_container"])
                 item.data["gitlab_container"] = validate_docker_container_name(text)
-                await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_WORKER_PATH)
-                await self._send(user, "ask_gitlab_worker_path", buttons=cancel_back(language))
+                if item.data["gitlab_location"] is SourceLocation.LOCAL:
+                    next_state = State.ADD_BACKUP_GITLAB_WORKER_PATH
+                    prompt = "ask_gitlab_worker_path"
+                else:
+                    next_state = State.ADD_BACKUP_GITLAB_REMOTE_PATH
+                    prompt = "ask_gitlab_remote_path"
+                await self.fsm.transition(user.id, state, next_state)
+                await self._send(user, prompt, buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-                if text == "-" and item.data.get("original_source_type") is SourceType.GITLAB:
-                    text = str(item.data["existing_gitlab_worker_path"])
-                item.data["gitlab_worker_path"] = text.strip()
+                if (
+                    text == "-"
+                    and item.data.get("original_source_type") is SourceType.GITLAB
+                    and item.data.get("existing_gitlab_location") is SourceLocation.LOCAL
+                ):
+                    text = str(item.data["existing_gitlab_backup_path"])
+                item.data["gitlab_backup_path"] = text.strip()
                 GitLabConfig(
+                    item.data["gitlab_location"],
                     item.data["gitlab_container"],
-                    item.data["gitlab_worker_path"],
+                    item.data["gitlab_backup_path"],
                 ).validate()
                 LocalSourcePathMapper(
                     self.settings.allowed_source_roots(),
                     self.settings.denied_source_roots(),
                     self.settings.local_source_mounts(),
-                ).validate_container_path(item.data["gitlab_worker_path"])
+                ).validate_container_path(item.data["gitlab_backup_path"])
                 await self._send(user, "gitlab_exclusive_warning")
+                await self._advance_to_schedule(session, user, item, state)
+            elif state is State.ADD_BACKUP_GITLAB_REMOTE_PATH:
+                if (
+                    text == "-"
+                    and item.data.get("original_source_type") is SourceType.GITLAB
+                    and item.data.get("existing_gitlab_location") is SourceLocation.REMOTE_SERVER
+                ):
+                    text = str(item.data["existing_gitlab_backup_path"])
+                item.data["gitlab_backup_path"] = text.strip()
+                GitLabConfig(
+                    item.data["gitlab_location"],
+                    item.data["gitlab_container"],
+                    item.data["gitlab_backup_path"],
+                    item.data.get("gitlab_remote_server_id"),
+                ).validate()
                 await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_SCHEDULE:
                 schedule_kind = SCHEDULE_ACTIONS.get(action or "")
@@ -805,6 +865,11 @@ class WizardMixin(LanguageHelpMixin):
                 None,
             ),
             State.ADD_BACKUP_FILES_PATHS: ("ask_paths", cancel_back(language), "paths"),
+            State.ADD_BACKUP_GITLAB_LOCATION: (
+                "choose_gitlab_location",
+                locations(language),
+                None,
+            ),
             State.ADD_BACKUP_GITLAB_CONTAINER: (
                 "ask_gitlab_container",
                 cancel_back(language),
@@ -813,7 +878,12 @@ class WizardMixin(LanguageHelpMixin):
             State.ADD_BACKUP_GITLAB_WORKER_PATH: (
                 "ask_gitlab_worker_path",
                 cancel_back(language),
-                "gitlab_worker_path",
+                "gitlab_backup_path",
+            ),
+            State.ADD_BACKUP_GITLAB_REMOTE_PATH: (
+                "ask_gitlab_remote_path",
+                cancel_back(language),
+                "gitlab_backup_path",
             ),
             State.ADD_BACKUP_ARCHIVE: (
                 "archive_explanation",
@@ -879,7 +949,11 @@ class WizardMixin(LanguageHelpMixin):
                 prompt,
                 buttons=cancel_back(language),
             )
-        elif state in {State.ADD_BACKUP_FILES_SERVER, State.ADD_BACKUP_MSSQL_SERVER}:
+        elif state in {
+            State.ADD_BACKUP_FILES_SERVER,
+            State.ADD_BACKUP_MSSQL_SERVER,
+            State.ADD_BACKUP_GITLAB_SERVER,
+        }:
             if not item.option_ids:
                 servers = await RemoteServerRepository(session).list_active(enabled_only=True)
                 item.option_ids = {
@@ -1085,11 +1159,17 @@ class WizardMixin(LanguageHelpMixin):
                 engine=self._engine_label(user.language_code, engine),
             )
         elif item.data["source_type"] is SourceType.GITLAB:
+            location_key = (
+                "source_location_local"
+                if item.data["gitlab_location"] is SourceLocation.LOCAL
+                else "source_location_remote"
+            )
             source_details = t(
                 user.language_code,
                 "gitlab_source_details",
+                location=t(user.language_code, location_key),
                 container=code(item.data["gitlab_container"]),
-                worker_path=code(item.data["gitlab_worker_path"]),
+                backup_path=code(item.data["gitlab_backup_path"]),
             )
         buttons = await self._backup_confirm_buttons(user, item)
         await self._send(
@@ -1145,9 +1225,14 @@ class WizardMixin(LanguageHelpMixin):
                 if field not in item.data:
                     return "source"
         elif item.data["source_type"] is SourceType.GITLAB:
-            for field in ("gitlab_container", "gitlab_worker_path"):
+            for field in ("gitlab_location", "gitlab_container", "gitlab_backup_path"):
                 if field not in item.data:
                     return "source"
+            if (
+                item.data["gitlab_location"] is SourceLocation.REMOTE_SERVER
+                and "gitlab_remote_server_id" not in item.data
+            ):
+                return "source"
         else:
             return "source"
         return None
@@ -1333,8 +1418,10 @@ class WizardMixin(LanguageHelpMixin):
                 return await service.create_database_profile(user, database=database, **common)
             if item.data["source_type"] is SourceType.GITLAB:
                 gitlab = GitLabConfig(
+                    item.data["gitlab_location"],
                     item.data["gitlab_container"],
-                    item.data["gitlab_worker_path"],
+                    item.data["gitlab_backup_path"],
+                    item.data.get("gitlab_remote_server_id"),
                 )
                 if "editing_profile_id" in item.data:
                     return await service.update_configuration(

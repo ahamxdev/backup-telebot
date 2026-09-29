@@ -129,11 +129,17 @@ class BackupProfilesMixin(RemoteServersMixin):
                     paths=paths,
                 )
             elif profile.gitlab_source is not None:
+                location_key = (
+                    "source_location_local"
+                    if profile.gitlab_source.location is SourceLocation.LOCAL
+                    else "source_location_remote"
+                )
                 source_details = t(
                     language,
                     "gitlab_source_details",
+                    location=t(language, location_key),
                     container=code(profile.gitlab_source.container_name),
-                    worker_path=code(profile.gitlab_source.worker_backup_path),
+                    backup_path=code(profile.gitlab_source.backup_path),
                 )
             elif profile.database_source is not None:
                 source_details = t(
@@ -147,11 +153,18 @@ class BackupProfilesMixin(RemoteServersMixin):
                 if item in users
             ]
             remote_server_id = None
-            if profile.files_source is not None:
-                if profile.files_source.location is SourceLocation.REMOTE_SERVER:
-                    remote_server_id = profile.files_source.remote_server_id
+            if (
+                profile.files_source is not None
+                and profile.files_source.location is SourceLocation.REMOTE_SERVER
+            ):
+                remote_server_id = profile.files_source.remote_server_id
             elif profile.database_source is not None:
                 remote_server_id = profile.database_source.artifact_remote_server_id
+            elif (
+                profile.gitlab_source is not None
+                and profile.gitlab_source.location is SourceLocation.REMOTE_SERVER
+            ):
+                remote_server_id = profile.gitlab_source.remote_server_id
             remote_server = servers.get(remote_server_id) if remote_server_id is not None else None
             inline = [
                 [
@@ -281,8 +294,10 @@ class BackupProfilesMixin(RemoteServersMixin):
         if profile.gitlab_source is not None:
             data.update(
                 {
+                    "existing_gitlab_location": profile.gitlab_source.location,
+                    "existing_gitlab_remote_server_id": profile.gitlab_source.remote_server_id,
                     "existing_gitlab_container": profile.gitlab_source.container_name,
-                    "existing_gitlab_worker_path": profile.gitlab_source.worker_backup_path,
+                    "existing_gitlab_backup_path": profile.gitlab_source.backup_path,
                 }
             )
         item = await self.fsm.set(user.id, State.ADD_BACKUP_NAME, data)

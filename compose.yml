@@ -84,8 +84,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      gitlab-helper:
-        condition: service_started
     command: ["backup-worker"]
     volumes:
       - type: bind
@@ -98,6 +96,7 @@ services:
 
   gitlab-helper:
     build: .
+    profiles: ["local-gitlab"]
     command: ["backup-gitlab-helper"]
     environment:
       GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock

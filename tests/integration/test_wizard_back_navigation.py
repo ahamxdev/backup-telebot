@@ -5,7 +5,7 @@ from pydantic import SecretStr
 
 from application.bootstrap_service import BootstrapService
 from config.settings import Settings
-from domain.enums import SourceType
+from domain.enums import SourceLocation, SourceType
 from infrastructure.telegram.transport import TelegramTransport
 from presentation.telegram.dispatcher import TelegramDispatcher
 from presentation.telegram.runtime import State
@@ -124,3 +124,40 @@ async def test_back_navigation_never_renders_secret_values(database, settings: S
     assert secret not in client.messages[-1]
     assert "Existing secret is set" in client.messages[-1]
     assert "Returned to the previous step" not in "\n".join(client.messages)
+
+
+async def test_gitlab_location_back_navigation_preserves_draft(
+    database, settings: Settings
+) -> None:
+    client = FakeClient()
+    dispatcher = TelegramDispatcher(
+        database.session_factory, TelegramTransport(client), configured(settings)
+    )
+    async with database.session_factory() as session:
+        actor, _ = await BootstrapService(session).bootstrap_superadmin(1001)
+        item = await dispatcher.fsm.set(
+            actor.id,
+            State.ADD_BACKUP_SOURCE,
+            {"name": "GitLab", "description": None},
+        )
+        await dispatcher._flow(session, actor, "", "source_gitlab", item)
+        assert item.state is State.ADD_BACKUP_GITLAB_LOCATION
+        assert client.messages[-1] == "Where is GitLab running?"
+
+        await dispatcher._flow(session, actor, "", "location_local", item)
+        assert item.state is State.ADD_BACKUP_GITLAB_CONTAINER
+        assert item.data["gitlab_location"] is SourceLocation.LOCAL
+        item.data["gitlab_container"] = "gitlab"
+        await dispatcher.fsm.transition(
+            actor.id,
+            State.ADD_BACKUP_GITLAB_CONTAINER,
+            State.ADD_BACKUP_GITLAB_WORKER_PATH,
+        )
+        item.data["gitlab_backup_path"] = "/host/gitlab-backups"
+
+        await dispatcher._back(session, actor)
+        assert "GitLab Docker container name" in client.messages[-1]
+        assert "gitlab" in client.messages[-1]
+        await dispatcher._back(session, actor)
+        assert client.messages[-1] == "Where is GitLab running?"
+        assert item.data["gitlab_backup_path"] == "/host/gitlab-backups"

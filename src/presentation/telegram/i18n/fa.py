@@ -282,17 +282,18 @@ STRINGS: dict[str, str] = {
     "ask_mssql_host_path": "مسیر متناظر mount شده روی میزبان ریموت را وارد کنید:",
     "choose_location": "محل منبع فایل/پوشه را انتخاب کنید:",
     "ask_paths": "یک یا چند مسیر مطلق فایل / پوشه، هرکدام در یک خط وارد کنید:",
+    "choose_gitlab_location": "گیت‌لب کجا اجرا می‌شود؟",
     "ask_gitlab_container": "نام کانتینر Docker گیت‌لب را وارد کنید:",
     "ask_gitlab_worker_path": "مسیر mount شده و قابل مشاهده برای worker را وارد کنید:",
+    "ask_gitlab_remote_path": "مسیر پوشه پشتیبان گیت‌لب روی سرور ریموت را وارد کنید:",
     "gitlab_exclusive_warning": (
         "⚠️ پوشه پشتیبان گیت‌لب منحصراً توسط این پروفایل مدیریت می‌شود. فایل‌های موجود "
         "پیش از هر پشتیبان جدید حذف می‌شوند.\n\nبرای بازیابی کامل، gitlab.rb و "
         "gitlab-secrets.json را جداگانه پشتیبان‌گیری کنید."
     ),
     "gitlab_source_details": (
-        "\n🦊 <b>منبع گیت‌لب</b>\nکانتینر: {container}\nمسیر پشتیبان گیت‌لب: "
-        "{worker_path}\n\n⚠️ فایل‌های موجود پیش از هر پشتیبان حذف می‌شوند. "
-        "از gitlab.rb و gitlab-secrets.json جداگانه پشتیبان بگیرید."
+        "\n🦊 <b>منبع گیت‌لب</b>\n📍 <b>مکان:</b> {location}"
+        "\n<b>کانتینر:</b> {container}\n<b>مسیر پشتیبان:</b> {backup_path}"
     ),
     "choose_schedule": "زمان‌بندی را انتخاب کنید. زمان‌ها بر اساس منطقه زمانی بکاپ هستند: {timezone}",
     "ask_schedule_interval": "N را به‌صورت عدد صحیح مثبت وارد کنید:",

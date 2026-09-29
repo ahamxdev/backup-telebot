@@ -49,19 +49,19 @@ File/directory profiles accept multiple absolute local paths under `ALLOWED_SOUR
 multiple paths on one enabled remote server. SQLite-looking files are marked so the execution
 phase can use a consistent SQLite snapshot instead of copying a live database file.
 
-GitLab profiles run GitLab's native application backup and then pass the single newly created
-`*_gitlab_backup.tar` through the same archive, compression, encryption, multipart delivery,
-retention, history, and recovery pipeline. The profile stores only the operator-configured,
-worker-visible backup path; Telegram input can never create a dynamic host mount. The configured
-directory is exclusive to this feature: all
-existing contents are safely removed before each native run, and the new native tar is removed
-only after it has been copied into the managed workspace and its size and SHA-256 have been
-verified.
+GitLab profiles can target the local host or a trusted remote server. Both modes run GitLab's
+native application backup and pass the single newly created `*_gitlab_backup.tar` through the
+same archive, compression, encryption, multipart delivery, retention, history, and recovery
+pipeline. Local profiles store the worker-visible path and manage that directory exclusively.
+Remote profiles store the directory as seen on the remote server, acquire the stable native tar
+over host-key-pinned SSH/rsync, verify its size and SHA-256, and only then remove that exact remote
+file.
 
-The bot and worker do not receive Docker's control socket. A dedicated `gitlab-helper` service
-owns that socket and exposes one local Unix-socket operation with a fixed argv equivalent to
-`docker exec -t <validated-container> gitlab-backup create`. Set `DOCKER_GID` to the numeric host
-group that owns `/var/run/docker.sock`. Container names accept only a conservative alphanumeric,
+The bot and worker do not receive Docker's control socket. For local GitLab only, the optional
+`gitlab-helper` service owns that socket and exposes one Unix-socket operation with a fixed argv
+equivalent to `docker exec -t <validated-container> gitlab-backup create`. Enable it with
+`docker compose --profile local-gitlab up -d`. Set `DOCKER_GID` to the numeric host group that
+owns `/var/run/docker.sock`. Container names accept only a conservative alphanumeric,
 underscore, dot, and hyphen form.
 
 To use same-host GitLab backup, the operator must add the GitLab backup directory as a read/write
@@ -70,9 +70,10 @@ file/directory source. Configure the mount in `LOCAL_SOURCE_MOUNTS` and its host
 `ALLOWED_SOURCE_ROOTS`, then enter only the worker-visible target path in Telegram. The bot never
 asks for or creates the host-side bind source.
 
-For GitLab on another host, use a remote files/directories profile for its operator-produced
-backup artifacts. That path uses the existing host-key-pinned SSH and hardened rsync transport;
-it does not use a local bind mount, Docker socket, or `gitlab-helper`.
+For GitLab on another host, choose Remote Server in the GitLab wizard, select an enabled trusted
+server, and enter the container name plus the remote backup directory. Remote mode uses the
+existing host-key-pinned SSH and hardened rsync transport and does not use a local bind mount,
+Docker socket, or `gitlab-helper`.
 
 > GitLab application backups are not complete machine backups. Back up `gitlab.rb` and
 > `gitlab-secrets.json` separately and protect them appropriately for disaster recovery.

@@ -139,8 +139,11 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
         }
     if gitlab is not None:
         payload["gitlab"] = {
+            "location": gitlab.location.value,
+            "remote_server_id": gitlab.remote_server_id,
+            "remote_server": _remote(gitlab.__dict__.get("remote_server")),
             "container_name": gitlab.container_name,
-            "worker_backup_path": gitlab.worker_backup_path,
+            "backup_path": gitlab.backup_path,
         }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
@@ -241,10 +244,14 @@ def restore_run_config(snapshot: str) -> BackupProfile:
         profile.files_source = files_source
     gitlab = payload.get("gitlab")
     if gitlab is not None:
-        profile.gitlab_source = GitLabSource(
+        gitlab_source = GitLabSource(
+            location=SourceLocation(gitlab["location"]),
+            remote_server_id=gitlab["remote_server_id"],
             container_name=str(gitlab["container_name"]),
-            worker_backup_path=str(gitlab["worker_backup_path"]),
+            backup_path=str(gitlab["backup_path"]),
         )
+        gitlab_source.remote_server = _restore_remote(gitlab["remote_server"])
+        profile.gitlab_source = gitlab_source
     return profile
 
 
@@ -278,6 +285,9 @@ async def snapshot_legacy_active_runs(session: AsyncSession) -> int:
                 .selectinload(BackupProfile.files_source)
                 .selectinload(FilesSource.paths),
                 selectinload(BackupRun.profile).selectinload(BackupProfile.gitlab_source),
+                selectinload(BackupRun.profile)
+                .selectinload(BackupProfile.gitlab_source)
+                .selectinload(GitLabSource.remote_server),
             )
             .with_for_update()
         )
@@ -300,6 +310,7 @@ async def snapshot_legacy_active_runs(session: AsyncSession) -> int:
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.remote_server),
                 selectinload(BackupProfile.files_source).selectinload(FilesSource.paths),
                 selectinload(BackupProfile.gitlab_source),
+                selectinload(BackupProfile.gitlab_source).selectinload(GitLabSource.remote_server),
             )
             .execution_options(populate_existing=True)
         )
@@ -310,6 +321,8 @@ async def snapshot_legacy_active_runs(session: AsyncSession) -> int:
             remote_server = profile.database_source.artifact_remote_server
         elif profile.files_source is not None:
             remote_server = profile.files_source.remote_server
+        elif profile.gitlab_source is not None:
+            remote_server = profile.gitlab_source.remote_server
         if remote_server is not None:
             await session.refresh(remote_server, with_for_update=True)
         assigned = set(

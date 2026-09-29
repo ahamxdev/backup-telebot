@@ -198,7 +198,7 @@ STRINGS: dict[str, str] = {
     "tls_required": "TLS Required",
     "tls_verify_ca": "TLS Verify CA",
     "tls_verify_full": "TLS Verify Full",
-    "location_local": "Local",
+    "location_local": "Local Host",
     "location_remote": "Remote Server",
     "schedule_manual": "Manual Only",
     "schedule_once": "Once",
@@ -290,8 +290,13 @@ STRINGS: dict[str, str] = {
     "ask_mssql_host_path": "Enter the corresponding remote-host mounted path:",
     "choose_location": "Choose the file/directory source location:",
     "ask_paths": "Enter one or more absolute file / directory paths, one per line:",
+    "choose_gitlab_location": "Where is GitLab running?",
     "ask_gitlab_container": "Enter the GitLab Docker container name:",
     "ask_gitlab_worker_path": "Enter the GitLab backup path visible inside the worker container:",
+    "ask_gitlab_remote_path": (
+        "Enter the GitLab backup directory on the remote server "
+        "(for example, /opt/gitlab/data/backups):"
+    ),
     "gitlab_exclusive_warning": (
         "⚠️ GitLab backup directory is managed exclusively by this profile. Existing backup "
         "files in this directory will be removed before each new backup.\n\n"
@@ -299,10 +304,8 @@ STRINGS: dict[str, str] = {
         "gitlab.rb and gitlab-secrets.json separately for complete disaster recovery."
     ),
     "gitlab_source_details": (
-        "\n🦊 <b>GitLab source</b>\nContainer: {container}\nGitLab Backup Path: {worker_path}"
-        "\n\n⚠️ This directory is managed exclusively by this profile; "
-        "existing files are removed before each native backup. Back up gitlab.rb and "
-        "gitlab-secrets.json separately."
+        "\n🦊 <b>GitLab source</b>\n📍 <b>Location:</b> {location}"
+        "\n<b>Container:</b> {container}\n<b>Backup Path:</b> {backup_path}"
     ),
     "choose_schedule": "Choose a schedule. Times use Backup Timezone: {timezone}",
     "ask_schedule_interval": "Enter N as a positive whole number:",
