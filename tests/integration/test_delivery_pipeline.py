@@ -177,6 +177,7 @@ async def _pending_run(
         stage=RunStage.PENDING_DELIVERY,
         pending_directory=str(finalized.directory),
         final_filename=artifact.name,
+        original_size_bytes=4096,
         final_size_bytes=finalized.size,
         final_sha256=finalized.checksum,
     )
@@ -237,6 +238,8 @@ async def test_transient_retry_is_durable_and_does_not_resend_success(
     )
     assert deliveries[0].status is DeliveryStatus.SUCCEEDED
     assert "📦 <b>Backup Completed</b>" in str(first.kwargs[0]["caption"])
+    assert "📦 <b>Original Backup Size:</b> 4.00 KiB" in str(first.kwargs[0]["caption"])
+    assert "🗜 <b>Final Backup Size:</b> 7 B" in str(first.kwargs[0]["caption"])
     assert "<b>Timezone:</b> UTC (UTC+00:00)" in str(first.kwargs[0]["caption"])
     assert first.kwargs[0]["parse_mode"] == "html"
     assert deliveries[0].attempts == 1
@@ -274,6 +277,7 @@ async def test_transient_retry_is_durable_and_does_not_resend_success(
     second = FakeTransport()
     assert await delivery_service(session, second, settings, clock).attempt(run)
     assert second.sent == [admins[1].telegram_user_id]
+    assert "Original Backup Size:</b> 4.00 KiB" in str(second.kwargs[0]["caption"])
     assert not artifact.exists()
     assert run.status is RunStatus.SUCCEEDED
     await session.refresh(deliveries[0])
@@ -308,6 +312,7 @@ async def test_multipart_retry_resumes_at_only_failed_part(session, settings) ->
         if entity == 10
     ]
     assert "Part 1/3" in owner_captions[0]
+    assert all("Original Backup Size:</b> 4.00 KiB" in item for item in owner_captions)
     assert "Part 2/3" in owner_captions[1]
 
     clock.advance(35)
@@ -316,6 +321,9 @@ async def test_multipart_retry_resumes_at_only_failed_part(session, settings) ->
     assert second.sent == [10, 10]
     assert "Part 2/3" in str(second.kwargs[0]["caption"])
     assert "Part 3/3" in str(second.kwargs[1]["caption"])
+    assert all(
+        "Original Backup Size:</b> 4.00 KiB" in str(item["caption"]) for item in second.kwargs
+    )
     assert run.status is RunStatus.SUCCEEDED
 
 

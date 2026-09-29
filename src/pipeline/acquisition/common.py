@@ -14,6 +14,7 @@ class SourceArtifact:
     path: Path
     extension: str
     metadata: dict[str, Any]
+    original_size_bytes: int
 
 
 @dataclass

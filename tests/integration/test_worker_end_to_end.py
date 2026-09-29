@@ -1,5 +1,6 @@
 import os
 import tarfile
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from database.models import (
     AuditEvent,
     BackupPath,
     BackupProfile,
+    BackupRun,
     FilesSource,
     GitLabSource,
     User,
@@ -28,12 +30,16 @@ from domain.enums import (
     EncryptionMode,
     ProfileStatus,
     Role,
+    RunStage,
     RunStatus,
+    RunTrigger,
     ScheduleKind,
     SourceLocation,
     SourceType,
 )
 from pipeline.acquisition import gitlab as gitlab_provider
+from pipeline.deadline import RunDeadline
+from pipeline.finalize import finalize_artifact
 from pipeline.jobs import RunService
 from pipeline.worker import PipelineRunner
 from security import SecretCipher
@@ -42,10 +48,12 @@ from security import SecretCipher
 class SuccessfulTransport:
     def __init__(self) -> None:
         self.paths: list[str] = []
+        self.captions: list[str] = []
 
     async def send_file(self, entity: int, file: str, **kwargs: object) -> object:
-        del entity, kwargs
+        del entity
         self.paths.append(file)
+        self.captions.append(str(kwargs["caption"]))
         return SimpleNamespace(id=7, media=SimpleNamespace(document=SimpleNamespace(id=8)))
 
 
@@ -104,6 +112,9 @@ async def test_local_worker_pipeline_to_delivery_and_cleanup(
         queued.run.error_message,
     )
     assert queued.run.pending_directory is None
+    assert queued.run.original_size_bytes == source_file.stat().st_size
+    assert queued.run.final_size_bytes is not None
+    assert all("Original Backup Size:</b> 25 B" in item for item in transport.captions)
     assert len(transport.paths) == 2
     assert not configured.WORK_ROOT.joinpath(queued.run.uuid).exists()
     transitions = set(
@@ -161,12 +172,15 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
         admin_ids={admin.id},
     )
 
+    native_sizes: list[int] = []
+
     async def invoke(source: GitLabSource, configured_settings, deadline_seconds: float) -> None:
         del source, configured_settings, deadline_seconds
         payload = tmp_path / "gitlab-payload"
         payload.write_bytes(os.urandom(4096))
         with tarfile.open(root / "200_gitlab_backup.tar", "w") as native:
             native.add(payload, arcname="repositories/data")
+        native_sizes.append((root / "200_gitlab_backup.tar").stat().st_size)
 
     monkeypatch.setattr(gitlab_provider, "_invoke_helper", invoke)
     queued = await RunService(session).enqueue_manual(owner, profile.id)
@@ -182,5 +196,75 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     assert queued.run.status is RunStatus.SUCCEEDED, queued.run.error_message
     assert queued.run.final_filename is not None
     assert queued.run.final_filename.endswith(".tar.gz.age")
+    assert queued.run.original_size_bytes == native_sizes[0]
+    assert queued.run.final_size_bytes is not None
+    assert queued.run.final_size_bytes != queued.run.original_size_bytes
     assert len(transport.paths) > 2
+    expected_original = f"{native_sizes[0] / 1024:.2f} KiB"
+    assert all(expected_original in caption for caption in transport.captions)
+    assert all("Final Backup Size:" in caption for caption in transport.captions)
     assert list(root.iterdir()) == []
+
+
+async def test_finalized_recovery_restores_original_size_from_manifest(
+    database, session, settings, tmp_path: Path
+) -> None:
+    configured = settings.model_copy(
+        update={
+            "MASTER_ENCRYPTION_KEY_B64": SecretStr("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+            "MIN_FREE_DISK_BYTES": 0,
+        }
+    )
+    owner = User(telegram_user_id=301, display_name="root", role=Role.SUPERADMIN)
+    session.add(owner)
+    await session.flush()
+    profile = BackupProfile(
+        name="Recovery",
+        source_type=SourceType.FILES_DIRECTORIES,
+        enabled=True,
+        status=ProfileStatus.DRAFT,
+        compression_format=CompressionFormat.NONE,
+        compression_preset=None,
+        encryption_mode=EncryptionMode.NONE,
+        created_by=owner.id,
+    )
+    session.add(profile)
+    await session.flush()
+    run = BackupRun(
+        profile_id=profile.id,
+        trigger=RunTrigger.MANUAL,
+        status=RunStatus.RUNNING,
+        stage=RunStage.FINALIZE,
+        lease_owner="recovery-worker",
+    )
+    session.add(run)
+    await session.flush()
+    source = tmp_path / "recovered-artifact.tar"
+    source.write_bytes(b"final artifact")
+    finalized = finalize_artifact(
+        source,
+        configured.PENDING_DELIVERY_ROOT,
+        profile.name,
+        run.uuid,
+        datetime.now(UTC),
+        "UTC",
+        source.name,
+        {"kind": "recovery-test"},
+        original_size_bytes=8192,
+    )
+    run.pending_directory = str(finalized.directory)
+    await session.commit()
+    runner = PipelineRunner(
+        database.session_factory,
+        configured,
+        SuccessfulTransport(),
+        "recovery-worker",
+    )
+
+    assert await runner._resume_finalized(  # noqa: SLF001 - recovery boundary regression
+        session, run, RunDeadline(60)
+    )
+
+    assert run.original_size_bytes == 8192
+    assert run.final_size_bytes == len(b"final artifact")
+    assert run.status is RunStatus.DELIVERY_PENDING

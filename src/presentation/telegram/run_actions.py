@@ -20,7 +20,7 @@ from presentation.telegram.datetime_format import (
     format_user_timestamp,
     timezone_label,
 )
-from presentation.telegram.formatting import code
+from presentation.telegram.formatting import code, format_bytes_iec
 from presentation.telegram.i18n import t
 from presentation.telegram.keyboards import (
     backups_menu,
@@ -29,6 +29,18 @@ from presentation.telegram.profile_summary import file_source_path_lines
 
 
 class RunActionsMixin(BackupProfilesMixin):
+    @staticmethod
+    def _run_sizes(run: BackupRun, unknown: str) -> tuple[str, str]:
+        original = (
+            format_bytes_iec(run.original_size_bytes)
+            if run.original_size_bytes is not None
+            else unknown
+        )
+        final = (
+            format_bytes_iec(run.final_size_bytes) if run.final_size_bytes is not None else unknown
+        )
+        return original, final
+
     @staticmethod
     def _safe_run_error(run: BackupRun) -> tuple[str, str]:
         if run.error_code is None and run.error_message is None:
@@ -62,6 +74,18 @@ class RunActionsMixin(BackupProfilesMixin):
             return
         await self._send(user, "active_runs_title", count=len(runs))
         for run in runs:
+            original_size, final_size = self._run_sizes(run, t(user.language_code, "size_unknown"))
+            size_summary = (
+                ""
+                if run.original_size_bytes is None and run.final_size_bytes is None
+                else "\n\n"
+                + t(
+                    user.language_code,
+                    "run_size_summary",
+                    original_size=original_size,
+                    final_size=final_size,
+                )
+            )
             await self.transport.send_text(
                 user.telegram_user_id,
                 t(
@@ -72,6 +96,7 @@ class RunActionsMixin(BackupProfilesMixin):
                     status=t(user.language_code, f"run_status_{run.status.value.lower()}"),
                     stage=t(user.language_code, f"run_stage_{run.stage.value.lower()}"),
                     created=format_user_datetime(run.created_at, timezone),
+                    size_summary=size_summary,
                 ),
                 buttons=await self._run_card_buttons(user, run),
             )
@@ -91,6 +116,13 @@ class RunActionsMixin(BackupProfilesMixin):
             total=page.total,
         )
         for run in page.items:
+            original_size, final_size = self._run_sizes(run, t(user.language_code, "size_unknown"))
+            size_summary = "\n\n" + t(
+                user.language_code,
+                "run_size_summary",
+                original_size=original_size,
+                final_size=final_size,
+            )
             await self.transport.send_text(
                 user.telegram_user_id,
                 t(
@@ -101,6 +133,7 @@ class RunActionsMixin(BackupProfilesMixin):
                     status=t(user.language_code, f"run_status_{run.status.value.lower()}"),
                     stage=t(user.language_code, f"run_stage_{run.stage.value.lower()}"),
                     created=format_user_datetime(run.created_at, timezone),
+                    size_summary=size_summary,
                 ),
                 buttons=await self._run_card_buttons(user, run),
             )
@@ -136,6 +169,7 @@ class RunActionsMixin(BackupProfilesMixin):
         for delivery in run.deliveries:
             deliveries[delivery.status] += 1
         error_code, error_key = self._safe_run_error(run)
+        original_size, final_size = self._run_sizes(run, t(user.language_code, "size_unknown"))
         if run.pending_directory is not None:
             artifact = t(
                 user.language_code,
@@ -247,6 +281,8 @@ class RunActionsMixin(BackupProfilesMixin):
                 error_code=error_code,
                 error_message=t(user.language_code, error_key),
                 artifact=artifact,
+                original_size=original_size,
+                final_size=final_size,
                 pending=deliveries[DeliveryStatus.PENDING],
                 succeeded=deliveries[DeliveryStatus.SUCCEEDED],
                 failed=deliveries[DeliveryStatus.FAILED],

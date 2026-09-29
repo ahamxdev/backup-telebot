@@ -193,9 +193,11 @@ async def _package_remote(
     cipher: SecretCipher,
     settings: Settings,
     deadline: RunDeadline | None = None,
-) -> None:
+) -> int:
     _sync_remote_compatibility()
-    await remote_files_provider._package_remote(profile, destination, cipher, settings, deadline)
+    return await remote_files_provider._package_remote(
+        profile, destination, cipher, settings, deadline
+    )
 
 
 async def _mssql(
@@ -269,7 +271,8 @@ async def acquire(
     if profile.source_type is SourceType.FILES_DIRECTORIES:
         path = destination.with_suffix(".tar")
         if profile.files_source and profile.files_source.location is SourceLocation.REMOTE_SERVER:
-            await _package_remote(profile, path, cipher, settings, deadline)
+            original_size_bytes = await _package_remote(profile, path, cipher, settings, deadline)
+            local_metadata: dict[str, object] = {}
         else:
             stop = CooperativeStop(deadline.check if deadline is not None else None)
             try:
@@ -284,6 +287,10 @@ async def acquire(
                         reason=error.reason or "unsafe_tree_entry",
                     )
                 raise
+            measured_size = local_metadata.get("original_size_bytes")
+            if not isinstance(measured_size, int):
+                raise RuntimeError("local acquisition did not report its logical size")
+            original_size_bytes = measured_size
         verify_stop = CooperativeStop(deadline.check if deadline is not None else None)
         await run_cooperative_thread(
             lambda: _verify_tar(path, deadline, verify_stop.check), verify_stop
@@ -291,7 +298,7 @@ async def acquire(
         metadata: dict[str, Any] = {"kind": "files", "verified": True}
         if profile.files_source and profile.files_source.location is SourceLocation.LOCAL:
             metadata.update(local_metadata)
-        return SourceArtifact(path, ".tar", metadata)
+        return SourceArtifact(path, ".tar", metadata, original_size_bytes)
     source = profile.database_source
     if source is None:
         raise PipelineError("INVALID_PROFILE", "database source is missing")
@@ -299,11 +306,11 @@ async def acquire(
     if source.engine is DatabaseEngine.POSTGRESQL:
         path = destination.with_suffix(".dump")
         metadata = await _postgres(source, path, password, settings, deadline)
-        return SourceArtifact(path, ".dump", metadata)
+        return SourceArtifact(path, ".dump", metadata, path.stat().st_size)
     if source.engine is DatabaseEngine.MYSQL_MARIADB:
         path = destination.with_suffix(".sql")
         metadata = await _mysql(source, path, password, settings, deadline)
-        return SourceArtifact(path, ".sql", metadata)
+        return SourceArtifact(path, ".sql", metadata, path.stat().st_size)
     path = destination.with_suffix(".bak")
     metadata = await _mssql(
         source,
@@ -315,4 +322,4 @@ async def acquire(
         operation_id,
         mssql_retrieval_record,
     )
-    return SourceArtifact(path, ".bak", metadata)
+    return SourceArtifact(path, ".bak", metadata, path.stat().st_size)

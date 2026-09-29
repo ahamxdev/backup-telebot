@@ -220,15 +220,17 @@ async def test_successful_remote_acquisition_never_starts_sftp(
     async def successful_rsync(*args: object, **_kwargs: object) -> tuple[int, int]:
         assert not connection_exited
         local = cast(Path, args[4])
+        budget = cast(remote_files.SourceBudget, args[6])
         local.mkdir(parents=True)
         (local / "payload").write_bytes(b"remote data")
+        budget.commit_scanned(len(b"remote data"), 1)
         return len(b"remote data"), 1
 
     monkeypatch.setattr(remote_files, "_ssh_gateway_factory", Gateway)
     monkeypatch.setattr(remote_files, "_rsync_download", successful_rsync)
     destination = tmp_path / "source.tar"
 
-    await remote_files._package_remote(
+    original_size = await remote_files._package_remote(
         profile,
         destination,
         secret_cipher,
@@ -236,6 +238,7 @@ async def test_successful_remote_acquisition_never_starts_sftp(
     )
 
     assert destination.is_file()
+    assert original_size == len(b"remote data")
     assert connection_exited
     assert not (tmp_path / "remote-download").exists()
     assert not (tmp_path / "ssh-material").exists()

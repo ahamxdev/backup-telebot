@@ -100,9 +100,14 @@ STRINGS: dict[str, str] = {
     "no_run_history": "No backup run history is available.",
     "run_history_header": "Run history — page {page}/{pages} ({total} total)",
     "run_history_footer": "Run history navigation",
+    "size_unknown": "Unknown",
+    "run_size_summary": (
+        "📦 Original Backup Size: {original_size}\n🗜 Final Backup Size: {final_size}"
+    ),
     "run_list_card": (
         "🔎 Run #<code>{run_id}</code> · <code>{profile}</code>\n\n━━━━━━━━━━━━━━\n"
-        "✅ Status\n{status}\n\n⚙️ Stage\n{stage}\n\n🕒 Created\n{created}\n\n━━━━━━━━━━━━━━"
+        "✅ Status\n{status}\n\n⚙️ Stage\n{stage}\n\n🕒 Created\n{created}"
+        "{size_summary}\n\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>Backup Run Details</b>\n━━━━━━━━━━━━━━\n🆔 <b>Run ID:</b> <code>{run_id}</code>\n"
@@ -114,7 +119,9 @@ STRINGS: dict[str, str] = {
         "🌍 <b>Timezone:</b> {timezone}\n━━━━━━━━━━━━━━\n"
         "⚠️ <b>Error Code:</b> <code>{error_code}</code>\n"
         "📝 <b>Safe Error:</b> {error_message}\n━━━━━━━━━━━━━━\n"
-        "📦 <b>Artifact:</b> {artifact}\n📨 <b>Deliveries:</b> "
+        "📦 <b>Original Backup Size:</b> {original_size}\n"
+        "🗜 <b>Final Backup Size:</b> {final_size}\n"
+        "📁 <b>Artifact:</b> {artifact}\n📨 <b>Deliveries:</b> "
         "Pending: <code>{pending}</code> · Succeeded: <code>{succeeded}</code>\n"
         "Failed: <code>{failed}</code> · Skipped: <code>{skipped}</code>\n━━━━━━━━━━━━━━"
     ),

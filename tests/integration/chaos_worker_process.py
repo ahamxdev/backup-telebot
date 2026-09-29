@@ -104,6 +104,7 @@ async def main() -> None:
                     "UTC",
                     "artifact.tar",
                     {"engine": "chaos-fixture"},
+                    original_size_bytes=8192,
                 )
                 run.status = RunStatus.DELIVERY_PENDING
                 run.stage = RunStage.PENDING_DELIVERY

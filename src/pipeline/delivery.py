@@ -32,7 +32,7 @@ from pipeline.errors import PipelineError
 from pipeline.finalize import delivery_artifacts
 from pipeline.workspace import remove_owned_directory
 from presentation.telegram.datetime_format import format_user_timestamp, timezone_label
-from presentation.telegram.formatting import TelegramHtml, code, escaped
+from presentation.telegram.formatting import TelegramHtml, code, escaped, format_bytes_iec
 
 log = structlog.get_logger()
 
@@ -130,6 +130,16 @@ def build_backup_caption(
         if warning_parts:
             sections.append(f"⚠️ <b>Skipped:</b> {escaped(', '.join(warning_parts))}")
     sections.extend((f"🆔 <b>Run ID:</b> {code(run.id)}", "━━━━━━━━━━━━━━"))
+    original_size = (
+        format_bytes_iec(run.original_size_bytes)
+        if run.original_size_bytes is not None
+        else "Unknown"
+    )
+    final_size = (
+        format_bytes_iec(run.final_size_bytes) if run.final_size_bytes is not None else "Unknown"
+    )
+    sections.insert(-1, f"📦 <b>Original Backup Size:</b> {escaped(original_size)}")
+    sections.insert(-1, f"🗜 <b>Final Backup Size:</b> {escaped(final_size)}")
     return TelegramHtml("\n".join(sections))
 
 

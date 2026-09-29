@@ -26,7 +26,7 @@ from domain.enums import (
 
 async def _prepare(session: AsyncSession, settings: Settings) -> Settings:
     await session.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
-    await session.execute(text("INSERT INTO alembic_version VALUES ('0018')"))
+    await session.execute(text("INSERT INTO alembic_version VALUES ('0019')"))
     await session.commit()
     for root in (settings.DATA_DIR, settings.WORK_ROOT, settings.PENDING_DELIVERY_ROOT):
         root.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -52,7 +52,7 @@ async def test_healthy_snapshot_reports_all_readiness_components(
     assert health.ready is True
     assert health.status == "healthy"
     assert health.database and health.schema_current
-    assert health.current_revision == health.head_revision == "0018"
+    assert health.current_revision == health.head_revision == "0019"
     assert health.worker_alive and health.scheduler_active and health.telegram_ready
     assert health.pending_delivery_bytes == 0
     assert health.queued_runs == health.running_runs == health.failed_runs == 0

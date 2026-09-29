@@ -60,6 +60,7 @@ class FinalizedArtifact:
     checksum: str
     size: int
     parts: tuple[ArtifactPart, ...] = ()
+    original_size_bytes: int | None = None
 
 
 def _split_artifact(
@@ -111,6 +112,7 @@ def finalize_artifact(
     metadata: dict[str, object],
     progress_check: Callable[[], None] | None = None,
     max_file_bytes: int = 2_000_000_000,
+    original_size_bytes: int | None = None,
 ) -> FinalizedArtifact:
     if max_file_bytes <= 0:
         raise ValueError("max_file_bytes must be positive")
@@ -144,6 +146,7 @@ def finalize_artifact(
             "run_uuid": run_uuid,
             "filename": filename,
             "size_bytes": size,
+            "original_size_bytes": original_size_bytes,
             "sha256": checksum,
             "created_at": now.isoformat(),
             "metadata": metadata,
@@ -174,7 +177,9 @@ def finalize_artifact(
     except Exception:
         shutil.rmtree(directory)
         raise
-    return FinalizedArtifact(directory, artifact, manifest, checksum, size, parts)
+    return FinalizedArtifact(
+        directory, artifact, manifest, checksum, size, parts, original_size_bytes
+    )
 
 
 def _verify_pending(
@@ -324,15 +329,31 @@ def recover_finalized(
     size = document.get("size_bytes")
     checksum = document.get("sha256")
     metadata = document.get("metadata")
+    original_size_bytes = document.get("original_size_bytes")
     if (
         not isinstance(filename, str)
         or Path(filename).name != filename
         or not isinstance(size, int)
         or not isinstance(checksum, str)
         or not isinstance(metadata, dict)
+        or (
+            original_size_bytes is not None
+            and (type(original_size_bytes) is not int or original_size_bytes < 0)
+        )
     ):
         raise PipelineError("INVALID_MANIFEST", "finalized manifest fields are invalid")
     artifact = resolved / filename
     parts = delivery_artifacts(resolved, filename, size, checksum)
     multipart = parts if document.get("schema") == 2 else ()
-    return FinalizedArtifact(resolved, artifact, manifest, checksum, size, multipart), metadata
+    return (
+        FinalizedArtifact(
+            resolved,
+            artifact,
+            manifest,
+            checksum,
+            size,
+            multipart,
+            original_size_bytes,
+        ),
+        metadata,
+    )

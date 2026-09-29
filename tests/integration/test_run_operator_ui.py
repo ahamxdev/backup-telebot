@@ -71,6 +71,7 @@ async def _failed_delivery_run(
         finished_at=datetime(2026, 9, 12, 10, tzinfo=UTC),
         error_code="DELIVERY_ACTION_REQUIRED",
         error_message="raw exception password=must-not-appear /secret/path",
+        original_size_bytes=4096,
     )
     session.add(run)
     await session.flush()
@@ -171,6 +172,11 @@ async def test_run_history_is_paginated_with_actor_bound_tokens(database, settin
     assert (
         len([message for _entity, message, _buttons in client.messages if "Run #" in message]) == 8
     )
+    assert all(
+        "Original Backup Size: Unknown" in message
+        for _entity, message, _buttons in client.messages
+        if "Run #" in message
+    )
     next_button = client.messages[-1][2][0][0]
     assert next_button.data.startswith(b"v1:")
     await dispatcher.handle(Event(1001, data=next_button.data))
@@ -200,6 +206,8 @@ async def test_run_details_show_status_and_only_safe_error(database, settings) -
     assert "PasswordWasInRawException" not in message
     assert "Succeeded: <code>1</code>" in message
     assert "Failed: <code>1</code>" in message
+    assert "Original Backup Size:</b> 4.00 KiB" in message
+    assert "Final Backup Size:</b> 15 B" in message
 
 
 async def test_cancel_active_run_from_operator_ui(database, settings) -> None:
@@ -254,6 +262,7 @@ async def test_retry_resumes_only_failed_recipients(database, settings) -> None:
         assert stored_failed.status is DeliveryStatus.PENDING
         assert stored_failed.attempts == 0
         assert stored_failed.next_attempt_at is not None
+        assert stored.original_size_bytes == 4096
     assert directory.exists()
 
 

@@ -439,7 +439,7 @@ async def _package_remote(
     cipher: SecretCipher,
     settings: Settings,
     deadline: RunDeadline | None = None,
-) -> None:
+) -> int:
     source = profile.files_source
     if source is None or source.remote_server is None or not source.remote_server.enabled:
         raise PipelineError("INVALID_PROFILE", "enabled remote server is missing")
@@ -525,6 +525,7 @@ async def _package_remote(
             files_count=files_count,
             bytes_transferred=bytes_transferred,
         )
+        return budget.bytes_used
     except asyncssh.ConnectionLost as exc:
         log.error(
             "remote_acquisition_failed",

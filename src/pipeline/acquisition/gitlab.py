@@ -284,6 +284,7 @@ async def _acquire_local_gitlab(
             "source_cleanup": "succeeded",
             "verified": True,
         },
+        size,
     )
 
 
@@ -521,6 +522,7 @@ async def _acquire_remote_gitlab(
             "source_cleanup": "succeeded",
             "verified": True,
         },
+        size,
     )
 
 

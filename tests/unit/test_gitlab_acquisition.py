@@ -142,6 +142,7 @@ async def test_successful_acquisition_cleans_native_only_after_verified_copy(
         _source(root), tmp_path / "workspace" / "source", settings, None
     )
     assert acquired.path.read_bytes() == b"native-gitlab-backup"
+    assert acquired.original_size_bytes == len(b"native-gitlab-backup")
     assert acquired.metadata["source_cleanup"] == "succeeded"
     assert list(root.iterdir()) == []
 
@@ -344,6 +345,7 @@ async def test_remote_acquisition_rsyncs_verifies_then_deletes(
     )
 
     assert artifact.path.read_bytes() == payload
+    assert artifact.original_size_bytes == len(payload)
     assert artifact.metadata["native_sha256"] == checksum
     assert events == ["backup", "hash", "rsync", "unlink", "disconnect"]
 

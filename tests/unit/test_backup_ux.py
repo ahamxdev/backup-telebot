@@ -1,3 +1,4 @@
+import sqlite3
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,7 +27,7 @@ from domain.enums import (
 from pipeline.acquisition import _package_local
 from pipeline.delivery import build_backup_caption
 from presentation.telegram.datetime_format import format_user_datetime
-from presentation.telegram.formatting import TelegramHtml
+from presentation.telegram.formatting import TelegramHtml, format_bytes_iec
 from presentation.telegram.i18n import action_for_text, t
 from presentation.telegram.profile_summary import (
     archive_compression_sections,
@@ -108,6 +109,8 @@ def test_backup_caption_contains_local_source_schedule_and_timezone() -> None:
         status=RunStatus.DELIVERY_PENDING,
         stage=RunStage.PENDING_DELIVERY,
         started_at=datetime(2026, 9, 15, 8, 25, tzinfo=UTC),
+        original_size_bytes=6_895_472_517,
+        final_size_bytes=2_340_756_480,
     )
 
     caption = build_backup_caption(
@@ -129,6 +132,8 @@ def test_backup_caption_contains_local_source_schedule_and_timezone() -> None:
         "2026-09-15 13:00:00",
         "⏱ <b>Started:</b>",
         "2026-09-15 11:55:00",
+        "📦 <b>Original Backup Size:</b> 6.42 GiB",
+        "🗜 <b>Final Backup Size:</b> 2.18 GiB",
     ):
         assert expected in caption
     parsed, entities = html.parse(caption)
@@ -169,6 +174,8 @@ def test_backup_caption_escapes_special_characters_and_preserves_long_path() -> 
     assert special_path in parsed
     assert "Git <production> & archive" in parsed
     assert any(entity.length == len(special_path) for entity in entities)
+    assert "Original Backup Size:</b> Unknown" in caption
+    assert "Final Backup Size:</b> Unknown" in caption
 
 
 def test_backup_caption_surfaces_partial_tree_warning_and_source_kind() -> None:
@@ -288,10 +295,31 @@ def test_local_single_file_and_directory_backups_succeed(settings, tmp_path: Pat
 
     assert file_metadata["source_kinds"] == ["file"]
     assert directory_metadata["source_kinds"] == ["directory"]
+    assert file_metadata["original_size_bytes"] == len(b"worker_processes auto;")
+    assert directory_metadata["original_size_bytes"] == len(b"server {}")
     with tarfile.open(file_archive) as archive:
         assert archive.extractfile("sources/0/nginx.conf").read() == b"worker_processes auto;"
     with tarfile.open(directory_archive) as archive:
         assert archive.extractfile("sources/0/conf.d/site.conf").read() == b"server {}"
+
+
+def test_sqlite_original_size_is_the_acquired_snapshot_size(settings, tmp_path: Path) -> None:
+    database = tmp_path / "application.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE records (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO records VALUES (?)", ("acquired",))
+    profile = _local_profile(database)
+    profile.files_source.paths[0].sqlite_snapshot_candidate = True
+    configured = settings.model_copy(
+        update={"ALLOWED_SOURCE_ROOTS": str(tmp_path), "MIN_FREE_DISK_BYTES": 0}
+    )
+    archive_path = tmp_path / "sqlite.tar"
+
+    metadata = _package_local(profile, archive_path, configured)
+
+    with tarfile.open(archive_path) as archive:
+        acquired_size = archive.getmember("sources/0/application.sqlite3").size
+    assert metadata["original_size_bytes"] == acquired_size
 
 
 def test_profile_cards_share_compact_archive_compression_sections_and_safe_html() -> None:
@@ -340,6 +368,20 @@ def test_profile_cards_share_compact_archive_compression_sections_and_safe_html(
         assert long_name in parsed
         assert long_path in parsed
         assert len(entities) >= 8
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        (0, "0 B"),
+        (1023, "1023 B"),
+        (1024, "1.00 KiB"),
+        (1024**2 * 3, "3.00 MiB"),
+        (1024**4 * 2, "2.00 TiB"),
+    ),
+)
+def test_byte_formatter_uses_iec_units(value: int, expected: str) -> None:
+    assert format_bytes_iec(value) == expected
 
 
 def test_database_caption_escapes_host_and_database_name() -> None:

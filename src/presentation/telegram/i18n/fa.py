@@ -100,9 +100,12 @@ STRINGS: dict[str, str] = {
     "no_run_history": "تاریخچه‌ای برای اجرای بکاپ وجود ندارد.",
     "run_history_header": "تاریخچه اجراها — صفحه {page} از {pages} (مجموع {total})",
     "run_history_footer": "پیمایش تاریخچه اجراها",
+    "size_unknown": "نامشخص",
+    "run_size_summary": "📦 اندازه اصلی بکاپ: {original_size}\n🗜 اندازه نهایی بکاپ: {final_size}",
     "run_list_card": (
         "🔎 اجرا #<code>{run_id}</code> · <code>{profile}</code>\n\n━━━━━━━━━━━━━━\n"
-        "✅ وضعیت\n{status}\n\n⚙️ مرحله\n{stage}\n\n🕒 ایجاد\n{created}\n\n━━━━━━━━━━━━━━"
+        "✅ وضعیت\n{status}\n\n⚙️ مرحله\n{stage}\n\n🕒 ایجاد\n{created}"
+        "{size_summary}\n\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>جزئیات اجرای بکاپ</b>\n━━━━━━━━━━━━━━\n🆔 <b>شناسه اجرا:</b> <code>{run_id}</code>\n"
@@ -113,7 +116,9 @@ STRINGS: dict[str, str] = {
         "🚀 <b>شروع:</b> {started}\n🏁 <b>پایان:</b> {finished}\n"
         "🌍 <b>منطقه زمانی:</b> {timezone}\n━━━━━━━━━━━━━━\n"
         "⚠️ <b>کد خطا:</b> <code>{error_code}</code>\n📝 <b>خطای امن:</b> {error_message}\n"
-        "━━━━━━━━━━━━━━\n📦 <b>فایل بکاپ:</b> {artifact}\n📨 <b>تحویل‌ها:</b> "
+        "━━━━━━━━━━━━━━\n📦 <b>اندازه اصلی بکاپ:</b> {original_size}\n"
+        "🗜 <b>اندازه نهایی بکاپ:</b> {final_size}\n"
+        "📁 <b>فایل بکاپ:</b> {artifact}\n📨 <b>تحویل‌ها:</b> "
         "در انتظار: <code>{pending}</code> · موفق: <code>{succeeded}</code>\n"
         "ناموفق: <code>{failed}</code> · ردشده: <code>{skipped}</code>\n━━━━━━━━━━━━━━"
     ),

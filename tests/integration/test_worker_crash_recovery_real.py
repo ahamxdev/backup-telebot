@@ -169,6 +169,7 @@ async def test_sigkill_after_finalization_recovers_exact_pending_artifact_once(
     assert recovered is not None
     finalized, metadata = recovered
     assert finalized.checksum == run.final_sha256
+    assert finalized.original_size_bytes == 8192
     assert metadata == {"engine": "chaos-fixture"}
     size = writer.stat().st_size
     await asyncio.sleep(0.1)

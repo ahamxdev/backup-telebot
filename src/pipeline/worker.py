@@ -387,6 +387,7 @@ class PipelineRunner:
             if warning is not None:
                 source.metadata["server_artifact_cleanup_error"] = warning
         run.source_metadata = json.dumps(source.metadata, sort_keys=True)
+        run.original_size_bytes = source.original_size_bytes
         check_processing_disk()
         await self._stage(session, run, RunStage.VERIFY_SOURCE)
         if not source.path.is_file() or source.path.stat().st_size == 0:
@@ -489,6 +490,7 @@ class PipelineRunner:
                 source.metadata,
                 finalize_stop.check,
                 self.settings.telegram_max_file_bytes(),
+                source.original_size_bytes,
             ),
             finalize_stop,
         )
@@ -578,6 +580,15 @@ class PipelineRunner:
         finalized, metadata = recovered
         previous_status = run.status
         run.final_filename = finalized.artifact.name
+        if finalized.original_size_bytes is not None:
+            if (
+                run.original_size_bytes is not None
+                and run.original_size_bytes != finalized.original_size_bytes
+            ):
+                raise PipelineError(
+                    "INVALID_MANIFEST", "original backup size changed during recovery"
+                )
+            run.original_size_bytes = finalized.original_size_bytes
         run.final_size_bytes = finalized.size
         run.final_sha256 = finalized.checksum
         run.source_metadata = json.dumps(metadata, sort_keys=True)

@@ -24,9 +24,11 @@ def test_at_or_below_limit_preserves_single_file(tmp_path: Path, size: int) -> N
         "backup.tar.zst",
         {},
         max_file_bytes=10,
+        original_size_bytes=4096,
     )
 
     assert finalized.parts == ()
+    assert finalized.original_size_bytes == 4096
     assert finalized.artifact.read_bytes() == payload
     assert [
         item.path
@@ -58,6 +60,7 @@ def test_oversized_final_artifact_is_split_and_reassembles_exactly(
         "backup.tar.zst",
         {},
         max_file_bytes=10,
+        original_size_bytes=8192,
     )
 
     assert not finalized.artifact.exists()
@@ -71,6 +74,7 @@ def test_oversized_final_artifact_is_split_and_reassembles_exactly(
 
     manifest = json.loads(finalized.manifest.read_text())
     assert manifest["sha256"] == original_sha256
+    assert manifest["original_size_bytes"] == 8192
     assert [part["sha256"] for part in manifest["parts"]] == [
         hashlib.sha256(part.path.read_bytes()).hexdigest() for part in finalized.parts
     ]
@@ -79,3 +83,4 @@ def test_oversized_final_artifact_is_split_and_reassembles_exactly(
     )
     assert recovered is not None
     assert recovered[0].parts == finalized.parts
+    assert recovered[0].original_size_bytes == 8192

@@ -401,7 +401,6 @@ def _package_local(
                 arcname = f"sources/{index}/{path.name}"
                 if item.sqlite_snapshot_candidate and stat.S_ISREG(source_stat.st_mode):
                     source_kinds.append("file")
-                    budget.add_known_file(source_stat.st_size)
                     snapshot = destination.parent / f"sqlite-{index}.db"
                     try:
                         _snapshot_sqlite_fd(source_fd, snapshot, budget, deadline)
@@ -417,7 +416,6 @@ def _package_local(
                                 snapshot_stat,
                                 arcname,
                                 budget,
-                                account_source=False,
                             )
                         finally:
                             os.close(snapshot_fd)
@@ -446,4 +444,8 @@ def _package_local(
                 _verify_path_identity(path, source_stat)
             finally:
                 os.close(source_fd)
-    return {"source_kinds": source_kinds, **warnings.metadata()}
+    return {
+        "source_kinds": source_kinds,
+        "original_size_bytes": budget.bytes_used,
+        **warnings.metadata(),
+    }

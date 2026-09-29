@@ -61,6 +61,10 @@ class BackupRun(TimestampMixin, Base):
             "'CLEANUP', 'COMPLETE')",
             name="ck_backup_runs_stage",
         ),
+        CheckConstraint(
+            "original_size_bytes >= 0",
+            name="ck_backup_runs_original_size",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -87,6 +91,7 @@ class BackupRun(TimestampMixin, Base):
     )
     failed_artifact_cleaned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     final_filename: Mapped[str | None] = mapped_column(String(512))
+    original_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     final_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     final_sha256: Mapped[str | None] = mapped_column(String(64))
     source_metadata: Mapped[str | None] = mapped_column(Text)
