@@ -51,8 +51,6 @@ class BackupService:
         allowed_local_roots: tuple[str, ...] | None = None,
         denied_local_roots: tuple[str, ...] = ("/proc", "/sys", "/dev", "/run"),
         local_source_mounts: tuple[tuple[str, str], ...] = (),
-        gitlab_host_root: str = "/opt/gitlab/data/backups",
-        gitlab_worker_root: str = "/host/gitlab-backups",
     ) -> None:
         self.session = session
         self.backups = BackupRepository(session)
@@ -61,8 +59,15 @@ class BackupService:
         self.allowed_local_roots = allowed_local_roots
         self.denied_local_roots = denied_local_roots
         self.local_source_mounts = local_source_mounts
-        self.gitlab_host_root = gitlab_host_root
-        self.gitlab_worker_root = gitlab_worker_root
+
+    def _validate_gitlab(self, gitlab: GitLabConfig) -> None:
+        gitlab.validate()
+        if self.allowed_local_roots is not None:
+            LocalSourcePathMapper(
+                self.allowed_local_roots,
+                self.denied_local_roots,
+                self.local_source_mounts,
+            ).validate_container_path(gitlab.worker_backup_path)
 
     def _persisted_file_paths(self, files: FilesConfig) -> tuple[str, ...]:
         if files.location is not SourceLocation.LOCAL or self.allowed_local_roots is None:
@@ -157,7 +162,7 @@ class BackupService:
         admin_ids: set[int],
     ) -> BackupProfile:
         AdminService.require_superadmin(actor)
-        gitlab.validate(self.gitlab_host_root, self.gitlab_worker_root)
+        self._validate_gitlab(gitlab)
         await self._validate_gitlab_root_available(gitlab)
         return await self._create_configured(
             actor,
@@ -268,7 +273,6 @@ class BackupService:
         if gitlab is not None:
             profile.gitlab_source = GitLabSource(
                 container_name=gitlab.container_name.strip(),
-                host_backup_path=gitlab.host_backup_path.strip(),
                 worker_backup_path=gitlab.worker_backup_path.strip(),
             )
         await self.session.flush()
@@ -431,7 +435,7 @@ class BackupService:
                 if not server.enabled:
                     raise ValueError("remote server must be enabled")
         if gitlab is not None:
-            gitlab.validate(self.gitlab_host_root, self.gitlab_worker_root)
+            self._validate_gitlab(gitlab)
             await self._validate_gitlab_root_available(gitlab, exclude_profile_id=profile.id)
         if preserve_age_passphrase and (
             encryption.mode is not EncryptionMode.AGE_PASSPHRASE or old_age_secret is None
@@ -520,7 +524,6 @@ class BackupService:
         elif gitlab is not None:
             profile.gitlab_source = GitLabSource(
                 container_name=gitlab.container_name.strip(),
-                host_backup_path=gitlab.host_backup_path.strip(),
                 worker_backup_path=gitlab.worker_backup_path.strip(),
             )
         else:
@@ -574,10 +577,7 @@ class BackupService:
             .join(BackupProfile)
             .where(
                 BackupProfile.archived_at.is_(None),
-                (
-                    (GitLabSource.host_backup_path == gitlab.host_backup_path)
-                    | (GitLabSource.worker_backup_path == gitlab.worker_backup_path)
-                ),
+                GitLabSource.worker_backup_path == gitlab.worker_backup_path,
             )
         )
         if exclude_profile_id is not None:

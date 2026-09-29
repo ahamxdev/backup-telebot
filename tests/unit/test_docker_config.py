@@ -19,6 +19,11 @@ def test_docker_deployment_security_and_tools() -> None:
     helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
     assert "docker.sock" not in bot
     assert "docker.sock" not in worker
+    assert "/opt/gitlab/data/backups" not in compose
+    assert "GITLAB_BACKUP_HOST_ROOT" not in compose
+    assert "target: /host/gitlab-backups" not in worker
+    assert "gitlab_helper_control:/run/gitlab-helper" in worker
+    assert not (root / "compose.gitlab-local.yml").exists()
     assert "/var/run/docker.sock:/var/run/docker.sock" in helper
     assert 'command: ["backup-gitlab-helper"]' in helper
     assert 'cap_drop: ["ALL"]' in compose

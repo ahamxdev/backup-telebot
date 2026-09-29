@@ -3,7 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from application.profile_config import GitLabConfig, validate_docker_container_name
+from application.profile_config import (
+    GitLabConfig,
+    LocalSourcePathMapper,
+    validate_docker_container_name,
+)
 from config.settings import Settings
 from database.models import GitLabSource
 from pipeline.acquisition import gitlab as provider
@@ -15,8 +19,7 @@ def _settings(tmp_path: Path) -> tuple[Settings, Path]:
     root.mkdir(parents=True)
     settings = Settings(
         APP_ENV="test",
-        GITLAB_BACKUP_HOST_ROOT="/opt/gitlab/data/backups",
-        GITLAB_BACKUP_WORKER_ROOT=root,
+        ALLOWED_SOURCE_ROOTS=str(root),
         GITLAB_HELPER_SOCKET=tmp_path / "control" / "helper.sock",
         GITLAB_STABILITY_INTERVAL_SECONDS=0.05,
         GITLAB_STABILITY_CHECKS=2,
@@ -27,7 +30,6 @@ def _settings(tmp_path: Path) -> tuple[Settings, Path]:
 def _source(root: Path) -> GitLabSource:
     return GitLabSource(
         container_name="gitlab_natrixo",
-        host_backup_path="/opt/gitlab/data/backups",
         worker_backup_path=str(root),
     )
 
@@ -49,19 +51,19 @@ def test_container_name_validation_rejects_unsafe_names(value: str) -> None:
         validate_docker_container_name(value)
 
 
-def test_profile_paths_must_equal_operator_approved_roots(tmp_path: Path) -> None:
+def test_profile_path_is_worker_visible_and_confined_to_configured_mounts(tmp_path: Path) -> None:
     settings, root = _settings(tmp_path)
-    GitLabConfig("gitlab", "/opt/gitlab/data/backups", str(root)).validate(
-        settings.GITLAB_BACKUP_HOST_ROOT, str(settings.GITLAB_BACKUP_WORKER_ROOT)
+    GitLabConfig("gitlab", str(root)).validate()
+    mapper = LocalSourcePathMapper(
+        settings.allowed_source_roots(),
+        settings.denied_source_roots(),
+        settings.local_source_mounts(),
     )
-    with pytest.raises(ValueError, match="operator-approved"):
-        GitLabConfig("gitlab", "/unapproved/gitlab", str(root)).validate(
-            settings.GITLAB_BACKUP_HOST_ROOT, str(settings.GITLAB_BACKUP_WORKER_ROOT)
-        )
-    with pytest.raises(ValueError, match="operator-approved"):
-        GitLabConfig("gitlab", "/opt/gitlab/data/backups", str(root / "nested")).validate(
-            settings.GITLAB_BACKUP_HOST_ROOT, str(settings.GITLAB_BACKUP_WORKER_ROOT)
-        )
+    assert mapper.validate_container_path(str(root)) == str(root)
+    with pytest.raises(ValueError, match="container root"):
+        mapper.validate_container_path("/unapproved/gitlab")
+    with pytest.raises(ValueError, match="filesystem root"):
+        GitLabConfig("gitlab", "/").validate()
 
 
 def test_pre_run_cleanup_is_confined_and_rejects_symlinks(tmp_path: Path) -> None:
@@ -189,7 +191,7 @@ def test_approved_root_rejects_symlink_component(tmp_path: Path) -> None:
     linked = tmp_path / "linked"
     linked.symlink_to(actual, target_is_directory=True)
     settings, _unused = _settings(tmp_path / "settings")
-    settings.GITLAB_BACKUP_WORKER_ROOT = linked
+    settings.ALLOWED_SOURCE_ROOTS = str(linked)
     with pytest.raises(PipelineError) as captured:
         provider._approved_root(_source(linked), settings)
     assert captured.value.code == "GITLAB_ROOT_INVALID"

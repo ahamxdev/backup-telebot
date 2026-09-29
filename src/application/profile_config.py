@@ -390,19 +390,13 @@ class FilesConfig:
 @dataclass(frozen=True)
 class GitLabConfig:
     container_name: str
-    host_backup_path: str
     worker_backup_path: str
 
-    def validate(self, approved_host_root: str, approved_worker_root: str) -> "GitLabConfig":
+    def validate(self) -> "GitLabConfig":
         validate_docker_container_name(self.container_name)
-        host = validate_absolute_path(self.host_backup_path)
         worker = validate_absolute_path(self.worker_backup_path)
-        if host == "/" or worker == "/":
+        if worker == "/":
             raise ValueError("GitLab backup root cannot be filesystem root")
-        if host != validate_absolute_path(approved_host_root):
-            raise ValueError("GitLab host backup path is not the operator-approved root")
-        if worker != validate_absolute_path(approved_worker_root):
-            raise ValueError("GitLab worker path is not the operator-approved root")
         return self
 
 

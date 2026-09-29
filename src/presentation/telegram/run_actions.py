@@ -184,7 +184,6 @@ class RunActionsMixin(BackupProfilesMixin):
                 user.language_code,
                 "gitlab_source_details",
                 container=code(profile.gitlab_source.container_name),
-                host_path=code(profile.gitlab_source.host_backup_path),
                 worker_path=code(profile.gitlab_source.worker_backup_path),
             )
         source_details = t(

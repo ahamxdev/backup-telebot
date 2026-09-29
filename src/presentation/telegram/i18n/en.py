@@ -290,14 +290,8 @@ STRINGS: dict[str, str] = {
     "ask_mssql_host_path": "Enter the corresponding remote-host mounted path:",
     "choose_location": "Choose the file/directory source location:",
     "ask_paths": "Enter one or more absolute file / directory paths, one per line:",
-    "ask_gitlab_container": "Enter the GitLab Docker container name (for example: gitlab_natrixo):",
-    "ask_gitlab_host_path": (
-        "Enter the operator-approved host GitLab backup directory "
-        "(for example: /opt/gitlab/data/backups):"
-    ),
-    "ask_gitlab_worker_path": (
-        "Enter the worker-visible mounted path (for example: /host/gitlab-backups):"
-    ),
+    "ask_gitlab_container": "Enter the GitLab Docker container name:",
+    "ask_gitlab_worker_path": "Enter the GitLab backup path visible inside the worker container:",
     "gitlab_exclusive_warning": (
         "⚠️ GitLab backup directory is managed exclusively by this profile. Existing backup "
         "files in this directory will be removed before each new backup.\n\n"
@@ -305,8 +299,8 @@ STRINGS: dict[str, str] = {
         "gitlab.rb and gitlab-secrets.json separately for complete disaster recovery."
     ),
     "gitlab_source_details": (
-        "\n🦊 <b>GitLab source</b>\nContainer: {container}\nHost directory: {host_path}\n"
-        "Worker path: {worker_path}\n\n⚠️ This directory is managed exclusively by this profile; "
+        "\n🦊 <b>GitLab source</b>\nContainer: {container}\nGitLab Backup Path: {worker_path}"
+        "\n\n⚠️ This directory is managed exclusively by this profile; "
         "existing files are removed before each native backup. Back up gitlab.rb and "
         "gitlab-secrets.json separately."
     ),

@@ -268,10 +268,8 @@ class FilesSource(Base):
 class GitLabSource(Base):
     __tablename__ = "gitlab_sources"
     __table_args__ = (
-        UniqueConstraint("host_backup_path", name="uq_gitlab_sources_host_root"),
         UniqueConstraint("worker_backup_path", name="uq_gitlab_sources_worker_root"),
         CheckConstraint("length(container_name) BETWEEN 1 AND 128", name="ck_gitlab_container"),
-        CheckConstraint("length(host_backup_path) > 1", name="ck_gitlab_host_path"),
         CheckConstraint("length(worker_backup_path) > 1", name="ck_gitlab_worker_path"),
     )
 
@@ -279,7 +277,6 @@ class GitLabSource(Base):
         ForeignKey("backup_profiles.id", ondelete="CASCADE"), primary_key=True
     )
     container_name: Mapped[str] = mapped_column(String(128))
-    host_backup_path: Mapped[str] = mapped_column(String(1024))
     worker_backup_path: Mapped[str] = mapped_column(String(1024))
     profile: Mapped[BackupProfile] = relationship(back_populates="gitlab_source")
 

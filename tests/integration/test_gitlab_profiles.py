@@ -28,8 +28,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
     actor, _created = await BootstrapService(session).bootstrap_superadmin(1001)
     service = BackupService(
         session,
-        gitlab_host_root="/opt/gitlab/data/backups",
-        gitlab_worker_root="/host/gitlab-backups",
+        allowed_local_roots=("/host/gitlab-backups",),
     )
     common = {
         "description": "native GitLab",
@@ -41,7 +40,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
     profile = await service.create_gitlab_profile(
         actor,
         name="gitlab",
-        gitlab=GitLabConfig("gitlab_natrixo", "/opt/gitlab/data/backups", "/host/gitlab-backups"),
+        gitlab=GitLabConfig("gitlab_natrixo", "/host/gitlab-backups"),
         **common,
     )
     assert profile.source_type is SourceType.GITLAB
@@ -53,7 +52,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
         profile.id,
         name="gitlab",
         source_type=SourceType.GITLAB,
-        gitlab=GitLabConfig("gitlab_primary", "/opt/gitlab/data/backups", "/host/gitlab-backups"),
+        gitlab=GitLabConfig("gitlab_primary", "/host/gitlab-backups"),
         database=None,
         files=None,
         enabled=True,
@@ -72,6 +71,20 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
 
 def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
     assert SOURCE_ACTIONS["source_gitlab"] is SourceType.GITLAB
+    container_prompt = t(LanguageCode.ENGLISH, "ask_gitlab_container")
+    path_prompt = t(LanguageCode.ENGLISH, "ask_gitlab_worker_path")
+    details = t(
+        LanguageCode.ENGLISH,
+        "gitlab_source_details",
+        container="gitlab",
+        worker_path="/host/gitlab-backups",
+    )
+    assert container_prompt == "Enter the GitLab Docker container name:"
+    assert "gitlab_natrixo" not in container_prompt
+    assert "host" not in path_prompt.lower()
+    assert "worker container" in path_prompt.lower()
+    assert "GitLab Backup Path: /host/gitlab-backups" in details
+    assert "Host path" not in details
     warning = t(LanguageCode.ENGLISH, "gitlab_exclusive_warning")
     assert "managed exclusively by this profile" in warning
     assert "removed before each new backup" in warning

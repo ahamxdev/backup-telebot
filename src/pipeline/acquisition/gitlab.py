@@ -1,4 +1,4 @@
-"""Acquire one native GitLab backup from an operator-approved bind mount."""
+"""Acquire one native GitLab backup from an operator-configured bind mount."""
 
 import asyncio
 import fcntl
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from application.profile_config import GitLabConfig
+from application.profile_config import GitLabConfig, LocalSourcePathMapper
 from config.settings import Settings
 from database.models import GitLabSource
 from pipeline.acquisition.common import SourceArtifact
@@ -32,11 +32,12 @@ class _FileState:
 
 
 def _approved_root(source: GitLabSource, settings: Settings) -> Path:
-    GitLabConfig(
-        source.container_name,
-        source.host_backup_path,
-        source.worker_backup_path,
-    ).validate(settings.GITLAB_BACKUP_HOST_ROOT, str(settings.GITLAB_BACKUP_WORKER_ROOT))
+    GitLabConfig(source.container_name, source.worker_backup_path).validate()
+    LocalSourcePathMapper(
+        settings.allowed_source_roots(),
+        settings.denied_source_roots(),
+        settings.local_source_mounts(),
+    ).validate_container_path(source.worker_backup_path)
     root = Path(source.worker_backup_path)
     try:
         resolved = root.resolve(strict=True)

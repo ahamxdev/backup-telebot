@@ -133,7 +133,6 @@ class BackupProfilesMixin(RemoteServersMixin):
                     language,
                     "gitlab_source_details",
                     container=code(profile.gitlab_source.container_name),
-                    host_path=code(profile.gitlab_source.host_backup_path),
                     worker_path=code(profile.gitlab_source.worker_backup_path),
                 )
             elif profile.database_source is not None:
@@ -283,7 +282,6 @@ class BackupProfilesMixin(RemoteServersMixin):
             data.update(
                 {
                     "existing_gitlab_container": profile.gitlab_source.container_name,
-                    "existing_gitlab_host_path": profile.gitlab_source.host_backup_path,
                     "existing_gitlab_worker_path": profile.gitlab_source.worker_backup_path,
                 }
             )

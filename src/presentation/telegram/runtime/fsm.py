@@ -40,7 +40,6 @@ class State(StrEnum):
     ADD_BACKUP_FILES_SERVER = "add_backup_files_server"
     ADD_BACKUP_FILES_PATHS = "add_backup_files_paths"
     ADD_BACKUP_GITLAB_CONTAINER = "add_backup_gitlab_container"
-    ADD_BACKUP_GITLAB_HOST_PATH = "add_backup_gitlab_host_path"
     ADD_BACKUP_GITLAB_WORKER_PATH = "add_backup_gitlab_worker_path"
     ADD_BACKUP_SCHEDULE = "add_backup_schedule"
     ADD_BACKUP_SCHEDULE_VALUE = "add_backup_schedule_value"

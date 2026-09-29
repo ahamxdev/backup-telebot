@@ -131,8 +131,7 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     configured = settings.model_copy(
         update={
             "MASTER_ENCRYPTION_KEY_B64": SecretStr(key),
-            "GITLAB_BACKUP_HOST_ROOT": "/opt/gitlab/data/backups",
-            "GITLAB_BACKUP_WORKER_ROOT": root,
+            "ALLOWED_SOURCE_ROOTS": str(root),
             "GITLAB_HELPER_SOCKET": tmp_path / "control" / "helper.sock",
             "GITLAB_STABILITY_INTERVAL_SECONDS": 0.001,
             "GITLAB_STABILITY_CHECKS": 2,
@@ -147,14 +146,15 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     service = BackupService(
         session,
         SecretCipher(key),
-        gitlab_host_root=configured.GITLAB_BACKUP_HOST_ROOT,
-        gitlab_worker_root=str(root),
+        allowed_local_roots=configured.allowed_source_roots(),
+        denied_local_roots=configured.denied_source_roots(),
+        local_source_mounts=configured.local_source_mounts(),
     )
     profile = await service.create_gitlab_profile(
         owner,
         name="GitLab E2E",
         description=None,
-        gitlab=GitLabConfig("gitlab", "/opt/gitlab/data/backups", str(root)),
+        gitlab=GitLabConfig("gitlab", str(root)),
         schedule=ScheduleConfig(ScheduleKind.MANUAL),
         compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
         encryption=EncryptionConfig(EncryptionMode.AGE_PASSPHRASE, passphrase="strong secret"),

@@ -81,8 +81,6 @@ class Settings(BaseSettings):
     FAILED_ARTIFACT_RETENTION_SECONDS: int = Field(default=604800, ge=60, le=31536000)
     UPLOAD_PROGRESS_INTERVAL_SECONDS: int = Field(default=5, ge=1, le=300)
     POSTGRES_CLIENT_ROOT: Path = Path("/usr/lib/postgresql")
-    GITLAB_BACKUP_HOST_ROOT: str = "/opt/gitlab/data/backups"
-    GITLAB_BACKUP_WORKER_ROOT: Path = Path("/host/gitlab-backups")
     GITLAB_HELPER_SOCKET: Path = Path("/run/gitlab-helper/helper.sock")
     GITLAB_STABILITY_INTERVAL_SECONDS: float = Field(default=1.0, ge=0.05, le=60)
     GITLAB_STABILITY_CHECKS: int = Field(default=2, ge=2, le=20)
