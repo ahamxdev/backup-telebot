@@ -20,6 +20,7 @@ import asyncssh
 
 from application.profile_config import (
     GitLabConfig,
+    LocalSourcePathError,
     LocalSourcePathMapper,
     validate_docker_container_name,
 )
@@ -50,19 +51,17 @@ class _FileState:
 
 def _approved_root(source: GitLabSource, settings: Settings) -> Path:
     GitLabConfig(source.location, source.container_name, source.backup_path).validate()
-    LocalSourcePathMapper(
-        settings.allowed_source_roots(),
-        settings.denied_source_roots(),
-        settings.local_source_mounts(),
-    ).validate_container_path(source.backup_path)
-    root = Path(source.backup_path)
     try:
-        resolved = root.resolve(strict=True)
-    except OSError as exc:
-        raise PipelineError("GITLAB_ROOT_INVALID", "GitLab backup root is unavailable") from exc
-    if root.is_symlink() or resolved != root or not root.is_dir():
-        raise PipelineError("GITLAB_ROOT_INVALID", "GitLab backup root must not use symlinks")
-    return root
+        validated = LocalSourcePathMapper(
+            settings.allowed_source_roots(),
+            settings.denied_source_roots(),
+            settings.local_source_mounts(),
+        ).validate_writable_container_directory(source.backup_path)
+    except LocalSourcePathError as exc:
+        raise PipelineError(
+            "GITLAB_ROOT_INVALID", "GitLab backup root is unavailable or unsafe", reason=exc.reason
+        ) from exc
+    return Path(validated)
 
 
 def _open_child_directory(parent_fd: int, name: str) -> int:

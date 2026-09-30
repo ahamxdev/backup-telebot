@@ -1,7 +1,8 @@
 import json
+import os
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from domain.enums import (
@@ -150,12 +151,73 @@ class LocalSourcePathMapper:
         identity, denied, mappings = self._configuration()
         if any(self._contains(path, root) for root in denied):
             raise LocalSourcePathError("denied_root", "local source is under a denied root")
-        container_roots = (*identity, *(container for _, container in mappings))
+        container_roots = self._container_roots(identity, mappings)
         if not any(self._contains(path, root) for root in container_roots):
             raise LocalSourcePathError(
                 "container_escape", "local source escapes its configured container root"
             )
         return str(path)
+
+    def _container_roots(
+        self,
+        identity: tuple[PurePosixPath, ...],
+        mappings: tuple[tuple[PurePosixPath, PurePosixPath], ...],
+    ) -> tuple[PurePosixPath, ...]:
+        mapped_host_roots = tuple(host for host, _container in mappings)
+        identity_container_roots = tuple(
+            root
+            for root in identity
+            if not any(
+                self._contains(root, host) or self._contains(host, root)
+                for host in mapped_host_roots
+            )
+        )
+        return (
+            *identity_container_roots,
+            *(container for _host, container in mappings),
+        )
+
+    def approved_container_roots(self) -> tuple[str, ...]:
+        """Return only operator-approved paths visible in the worker namespace."""
+        identity, denied, mappings = self._configuration()
+        roots = self._container_roots(identity, mappings)
+        return tuple(
+            dict.fromkeys(
+                str(root)
+                for root in roots
+                if not any(self._contains(root, denied_root) for denied_root in denied)
+            )
+        )
+
+    def validate_writable_container_directory(self, value: str) -> str:
+        """Validate a cleanup-capable directory in the worker mount namespace."""
+        clean = self.validate_container_path(value)
+        path = Path(clean)
+        try:
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise LocalSourcePathError(
+                "not_found", "directory does not exist inside the backup worker"
+            ) from error
+        if resolved != path:
+            raise LocalSourcePathError(
+                "symlink_escape", "unsafe or symbolic-link path is not allowed"
+            )
+        try:
+            self.validate_container_path(str(resolved))
+        except LocalSourcePathError as error:
+            raise LocalSourcePathError(
+                "symlink_escape", "unsafe or symbolic-link path is not allowed"
+            ) from error
+        if not path.is_dir():
+            raise LocalSourcePathError(
+                "not_directory", "path is not a directory inside the backup worker"
+            )
+        if not os.access(path, os.W_OK | os.X_OK):
+            raise LocalSourcePathError(
+                "not_writable", "directory is not writable inside the backup worker"
+            )
+        return clean
 
 
 def validate_approved_local_path(

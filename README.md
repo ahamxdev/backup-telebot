@@ -64,11 +64,29 @@ equivalent to `docker exec -t <validated-container> gitlab-backup create`. Enabl
 owns `/var/run/docker.sock`. Container names accept only a conservative alphanumeric,
 underscore, dot, and hyphen form.
 
-To use same-host GitLab backup, the operator must add the GitLab backup directory as a read/write
-bind mount on the `worker` service in the normal Compose configuration, just like a local
-file/directory source. Configure the mount in `LOCAL_SOURCE_MOUNTS` and its host root in
-`ALLOWED_SOURCE_ROOTS`, then enter only the worker-visible target path in Telegram. The bot never
-asks for or creates the host-side bind source.
+To use same-host GitLab backup, the operator must add the GitLab backup directory as the same
+read/write bind mount on the `bot` (for immediate wizard validation) and `worker` (for acquisition)
+services, just like a local file/directory source. Configure the host-to-container pair in
+`LOCAL_SOURCE_MOUNTS`; the mount mapping itself is the approval. Then enter only the worker-visible
+target path in Telegram. The bot never asks for or creates the host-side bind source. For example,
+keep this deployment-specific mount out of the base Compose file and add it in an override:
+
+```yaml
+services:
+  bot:
+    volumes:
+      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
+  worker:
+    volumes:
+      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
+```
+
+```dotenv
+LOCAL_SOURCE_MOUNTS=/etc:/host/etc,/opt/gitlab/data/backups:/host/gitlab-backups
+```
+
+The Telegram value for that mapping is `/host/gitlab-backups`, never the host source path and
+never `/host/opt/gitlab/data/backups`.
 
 For GitLab on another host, choose Remote Server in the GitLab wizard, select an enabled trusted
 server, and enter the container name plus the remote backup directory. Remote mode uses the

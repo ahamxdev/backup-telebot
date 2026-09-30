@@ -297,8 +297,25 @@ STRINGS: dict[str, str] = {
     "choose_gitlab_location": "📍 <b>مکان گیت‌لب</b>\nاین نمونه گیت‌لب کجا اجرا می‌شود؟",
     "ask_gitlab_container": "🐳 <b>کانتینر گیت‌لب</b>\nنام کانتینر Docker را وارد کنید.",
     "ask_gitlab_worker_path": (
-        "📂 <b>پوشه بکاپ گیت‌لب</b>\nمسیر قابل مشاهده داخل کانتینر worker را وارد کنید."
+        "📂 <b>پوشه بکاپ گیت‌لب</b>\n"
+        "پوشه بکاپ گیت‌لب را همان‌طور که داخل worker متصل شده است وارد کنید."
     ),
+    "ask_gitlab_worker_path_roots": (
+        "📂 <b>پوشه بکاپ گیت‌لب</b>\n"
+        "پوشه بکاپ گیت‌لب را همان‌طور که داخل worker متصل شده است وارد کنید.\n"
+        "ریشه‌های قابل مشاهده و مجاز:\n{available_roots}"
+    ),
+    "gitlab_worker_path_invalid_path": (
+        "مسیر باید مطلق باشد و نباید پیمایش مسیر مانند <code>..</code> داشته باشد."
+    ),
+    "gitlab_worker_path_container_escape": "مسیر خارج از ریشه‌های مجاز worker است.",
+    "gitlab_worker_path_denied_root": "مسیر داخل بخش محافظت‌شده فایل‌سیستم است.",
+    "gitlab_worker_path_not_found": "پوشه داخل worker بکاپ وجود ندارد.",
+    "gitlab_worker_path_not_directory": "مسیر داخل worker بکاپ یک پوشه نیست.",
+    "gitlab_worker_path_not_writable": "پوشه داخل worker بکاپ قابل نوشتن نیست.",
+    "gitlab_worker_path_symlink_escape": "مسیر ناامن است یا از پیوند نمادین استفاده می‌کند.",
+    "gitlab_worker_path_invalid_configuration": "تنظیمات mount محلی نامعتبر است.",
+    "gitlab_worker_path_root_not_allowed": "ریشه فایل‌سیستم نمی‌تواند مجاز شود.",
     "ask_gitlab_remote_path": ("📂 <b>پوشه بکاپ گیت‌لب</b>\nمسیر پوشه روی سرور ریموت را وارد کنید."),
     "no_remote_servers_available": (
         "⚠️ <b>سرور ریموتی در دسترس نیست</b>\n"

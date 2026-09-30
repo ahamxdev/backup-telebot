@@ -88,7 +88,7 @@ def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
     assert "Docker container name" in container_prompt
     assert "gitlab_natrixo" not in container_prompt
     assert "host" not in path_prompt.lower()
-    assert "worker container" in path_prompt.lower()
+    assert "backup worker" in path_prompt.lower()
     assert "Backup Path:</b> /host/gitlab-backups" in details
     assert "Host path" not in details
     warning = t(LanguageCode.ENGLISH, "gitlab_exclusive_warning")

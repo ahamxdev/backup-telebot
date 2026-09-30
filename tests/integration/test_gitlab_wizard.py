@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -179,6 +180,88 @@ async def test_local_gitlab_confirm_still_works(database, settings: Settings) ->
         assert profile.gitlab_source is not None
         assert profile.gitlab_source.location is SourceLocation.LOCAL
         assert profile.gitlab_source.remote_server_id is None
+
+
+async def test_local_gitlab_worker_path_create_and_edit_use_specific_validation(
+    database, settings: Settings, tmp_path: Path
+) -> None:
+    root = tmp_path / "gitlab-backups"
+    root.mkdir()
+    configured_settings = configured(
+        settings.model_copy(update={"ALLOWED_SOURCE_ROOTS": str(root)})
+    )
+    client = FakeClient()
+    dispatcher = TelegramDispatcher(
+        database.session_factory, TelegramTransport(client), configured_settings
+    )
+    async with database.session_factory() as session:
+        actor, _ = await BootstrapService(session).bootstrap_superadmin(1001)
+        create = await dispatcher.fsm.set(
+            actor.id,
+            State.ADD_BACKUP_GITLAB_WORKER_PATH,
+            {
+                "gitlab_location": SourceLocation.LOCAL,
+                "gitlab_container": "gitlab",
+            },
+        )
+
+        await dispatcher._flow(session, actor, str(root / "missing"), None, create)
+
+        assert create.state is State.ADD_BACKUP_GITLAB_WORKER_PATH
+        assert "does not exist inside the backup worker" in client.messages[-1]
+        assert "gitlab_backup_path" not in create.data
+
+        await dispatcher._flow(session, actor, str(root), None, create)
+
+        assert create.state is State.ADD_BACKUP_SCHEDULE
+        assert create.data["gitlab_backup_path"] == str(root)
+
+        edit = await dispatcher.fsm.set(
+            actor.id,
+            State.ADD_BACKUP_GITLAB_WORKER_PATH,
+            {
+                "original_source_type": SourceType.GITLAB,
+                "existing_gitlab_location": SourceLocation.LOCAL,
+                "existing_gitlab_backup_path": str(root),
+                "gitlab_location": SourceLocation.LOCAL,
+                "gitlab_container": "gitlab",
+            },
+        )
+
+        await dispatcher._flow(session, actor, "-", None, edit)
+
+        assert edit.state is State.ADD_BACKUP_SCHEDULE
+        assert edit.data["gitlab_backup_path"] == str(root)
+
+
+async def test_local_gitlab_worker_prompt_lists_only_worker_visible_roots(
+    database, settings: Settings
+) -> None:
+    configured_settings = configured(
+        settings.model_copy(
+            update={
+                "ALLOWED_SOURCE_ROOTS": "/opt/gitlab/data/backups",
+                "LOCAL_SOURCE_MOUNTS": ("/opt/gitlab/data/backups:/host/gitlab-backups"),
+            }
+        )
+    )
+    client = FakeClient()
+    dispatcher = TelegramDispatcher(
+        database.session_factory, TelegramTransport(client), configured_settings
+    )
+    async with database.session_factory() as session:
+        actor, _ = await BootstrapService(session).bootstrap_superadmin(1001)
+        item = await dispatcher.fsm.set(
+            actor.id,
+            State.ADD_BACKUP_GITLAB_CONTAINER,
+            {"gitlab_location": SourceLocation.LOCAL},
+        )
+
+        await dispatcher._flow(session, actor, "gitlab", None, item)
+
+        assert item.state is State.ADD_BACKUP_GITLAB_WORKER_PATH
+        assert "/host/gitlab-backups" in client.messages[-1]
+        assert "/opt/gitlab/data/backups" not in client.messages[-1]
 
 
 def test_gitlab_wizard_prompts_use_compact_html_style() -> None:

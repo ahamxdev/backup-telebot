@@ -305,8 +305,27 @@ STRINGS: dict[str, str] = {
     "choose_gitlab_location": "📍 <b>GitLab Location</b>\nWhere is this GitLab instance running?",
     "ask_gitlab_container": "🐳 <b>GitLab Container</b>\nEnter the Docker container name.",
     "ask_gitlab_worker_path": (
-        "📂 <b>GitLab Backup Directory</b>\nEnter the path visible inside the worker container."
+        "📂 <b>GitLab Backup Directory</b>\n"
+        "Enter the GitLab backup directory as mounted inside the backup worker."
     ),
+    "ask_gitlab_worker_path_roots": (
+        "📂 <b>GitLab Backup Directory</b>\n"
+        "Enter the GitLab backup directory as mounted inside the backup worker.\n"
+        "Available worker-visible root(s):\n{available_roots}"
+    ),
+    "gitlab_worker_path_invalid_path": (
+        "The path must be absolute and must not contain traversal such as <code>..</code>."
+    ),
+    "gitlab_worker_path_container_escape": "The path is outside the approved worker-visible roots.",
+    "gitlab_worker_path_denied_root": "The path is inside a protected filesystem area.",
+    "gitlab_worker_path_not_found": "The directory does not exist inside the backup worker.",
+    "gitlab_worker_path_not_directory": "The path is not a directory inside the backup worker.",
+    "gitlab_worker_path_not_writable": "The directory is not writable inside the backup worker.",
+    "gitlab_worker_path_symlink_escape": "The path is unsafe or uses a symbolic link.",
+    "gitlab_worker_path_invalid_configuration": (
+        "The approved local mount configuration is invalid. Contact the operator."
+    ),
+    "gitlab_worker_path_root_not_allowed": "The filesystem root cannot be approved.",
     "ask_gitlab_remote_path": (
         "📂 <b>GitLab Backup Directory</b>\nEnter the directory on the remote server "
         "(for example, <code>/opt/gitlab/data/backups</code>)."

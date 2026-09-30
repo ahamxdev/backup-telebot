@@ -15,6 +15,7 @@ from application.profile_config import (
     EncryptionConfig,
     FilesConfig,
     GitLabConfig,
+    LocalSourcePathError,
     LocalSourcePathMapper,
     ScheduleConfig,
     validate_docker_container_name,
@@ -453,7 +454,10 @@ class WizardMixin(LanguageHelpMixin):
                     next_state = State.ADD_BACKUP_GITLAB_REMOTE_PATH
                     prompt = "ask_gitlab_remote_path"
                 await self.fsm.transition(user.id, state, next_state)
-                await self._send(user, prompt, buttons=cancel_back(language))
+                if next_state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
+                    await self._send_gitlab_worker_path_prompt(user)
+                else:
+                    await self._send(user, prompt, buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
                 if (
                     text == "-"
@@ -461,17 +465,18 @@ class WizardMixin(LanguageHelpMixin):
                     and item.data.get("existing_gitlab_location") is SourceLocation.LOCAL
                 ):
                     text = str(item.data["existing_gitlab_backup_path"])
-                item.data["gitlab_backup_path"] = text.strip()
-                GitLabConfig(
-                    item.data["gitlab_location"],
-                    item.data["gitlab_container"],
-                    item.data["gitlab_backup_path"],
-                ).validate()
+                candidate = text.strip()
                 LocalSourcePathMapper(
                     self.settings.allowed_source_roots(),
                     self.settings.denied_source_roots(),
                     self.settings.local_source_mounts(),
-                ).validate_container_path(item.data["gitlab_backup_path"])
+                ).validate_writable_container_directory(candidate)
+                GitLabConfig(
+                    item.data["gitlab_location"],
+                    item.data["gitlab_container"],
+                    candidate,
+                ).validate()
+                item.data["gitlab_backup_path"] = candidate
                 await self._send(user, "gitlab_exclusive_warning")
                 await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_GITLAB_REMOTE_PATH:
@@ -733,8 +738,33 @@ class WizardMixin(LanguageHelpMixin):
             )
             if await self.fsm.invalid(user.id):
                 await self._home(user, "too_many_invalid")
+            elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH and isinstance(
+                exc, LocalSourcePathError
+            ):
+                await self._send(user, "gitlab_worker_path_" + exc.reason)
             else:
                 await self._send(user, "invalid")
+
+    def _gitlab_worker_roots(self) -> TelegramHtml:
+        roots = LocalSourcePathMapper(
+            self.settings.allowed_source_roots(),
+            self.settings.denied_source_roots(),
+            self.settings.local_source_mounts(),
+        ).approved_container_roots()
+        if not roots:
+            return TelegramHtml("")
+        return TelegramHtml("\n".join(f"• {code(root)}" for root in roots))
+
+    async def _send_gitlab_worker_path_prompt(self, user: User, *, current: Any = None) -> None:
+        roots = self._gitlab_worker_roots()
+        key = "ask_gitlab_worker_path_roots" if roots else "ask_gitlab_worker_path"
+        await self._wizard_prompt(
+            user,
+            key,
+            cancel_back(user.language_code),
+            current=current,
+            available_roots=roots,
+        )
 
     async def _back(self, session: AsyncSession, user: User) -> None:
         current = await self.fsm.get(user.id)
@@ -1043,6 +1073,10 @@ class WizardMixin(LanguageHelpMixin):
             await self._access_keyboard(user, item, admin_direction=False)
         elif item.data.get("view") == "selection":
             await self._render_selection(user, item)
+        elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
+            await self._send_gitlab_worker_path_prompt(
+                user, current=item.data.get("gitlab_backup_path")
+            )
         elif state in simple:
             prompt, buttons, field = simple[state]
             values = {"current": item.data["name"]} if prompt == "ask_edit_backup_name" else {}

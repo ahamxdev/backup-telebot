@@ -8,6 +8,7 @@ import pytest
 
 from application.profile_config import (
     GitLabConfig,
+    LocalSourcePathError,
     LocalSourcePathMapper,
     validate_docker_container_name,
 )
@@ -201,6 +202,49 @@ def test_approved_root_rejects_symlink_component(tmp_path: Path) -> None:
     with pytest.raises(PipelineError) as captured:
         provider._approved_root(_source(linked), settings)
     assert captured.value.code == "GITLAB_ROOT_INVALID"
+
+
+def test_worker_directory_validation_reports_safe_specific_reasons(tmp_path: Path) -> None:
+    root = tmp_path / "approved"
+    root.mkdir()
+    mapper = LocalSourcePathMapper((str(root),), ("/proc",))
+
+    assert mapper.validate_writable_container_directory(str(root)) == str(root)
+
+    with pytest.raises(LocalSourcePathError) as missing:
+        mapper.validate_writable_container_directory(str(root / "missing"))
+    assert missing.value.reason == "not_found"
+
+    regular_file = root / "file"
+    regular_file.write_text("not a directory")
+    with pytest.raises(LocalSourcePathError) as not_directory:
+        mapper.validate_writable_container_directory(str(regular_file))
+    assert not_directory.value.reason == "not_directory"
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    escape = root / "escape"
+    escape.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(LocalSourcePathError) as symlink:
+        mapper.validate_writable_container_directory(str(escape))
+    assert symlink.value.reason == "symlink_escape"
+
+    with pytest.raises(LocalSourcePathError) as traversal:
+        mapper.validate_writable_container_directory(str(root / "child" / ".."))
+    assert traversal.value.reason == "invalid_path"
+
+
+def test_worker_directory_validation_rejects_unwritable_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "approved"
+    root.mkdir()
+    mapper = LocalSourcePathMapper((str(root),), ())
+    monkeypatch.setattr(provider.os, "access", lambda *_args: False)
+
+    with pytest.raises(LocalSourcePathError) as unwritable:
+        mapper.validate_writable_container_directory(str(root))
+    assert unwritable.value.reason == "not_writable"
 
 
 def test_helper_uses_only_fixed_gitlab_command(monkeypatch: pytest.MonkeyPatch) -> None:
