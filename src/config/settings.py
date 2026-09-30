@@ -29,13 +29,10 @@ class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
     MASTER_ENCRYPTION_KEY_B64: SecretStr | None = None
     DATABASE_URL: str = "sqlite+aiosqlite:///./.runtime/data/app.sqlite3"
-    WEBHOOK_HOST: str = "127.0.0.1"
-    WEBHOOK_PORT: int = Field(default=8000, ge=1, le=65535)
     TELEGRAM_API_ID: int | None = None
     TELEGRAM_API_HASH: SecretStr | None = None
     TELEGRAM_BOT_TOKEN: SecretStr | None = None
     SUPERADMIN_TELEGRAM_IDS: str | None = None
-    TELEGRAM_SUPERADMIN_ID: int | None = None
     TELEGRAM_SUPERADMIN_LANGUAGE: LanguageCode = LanguageCode.ENGLISH
     TELEGRAM_SESSION_PATH: Path = Path(".runtime/telegram/telegram.session")
     TELEGRAM_WORKER_SESSION_PATH: Path = Path(".runtime/telegram/worker.session")
@@ -113,11 +110,9 @@ class Settings(BaseSettings):
         return tuple(mappings)
 
     def superadmin_telegram_ids(self) -> tuple[int, ...]:
-        """Return the new multi-ID setting, falling back to the legacy single ID."""
+        """Return the configured, ordered set of superadmin Telegram IDs."""
         if self.SUPERADMIN_TELEGRAM_IDS is not None:
             return parse_superadmin_telegram_ids(self.SUPERADMIN_TELEGRAM_IDS)
-        if self.TELEGRAM_SUPERADMIN_ID is not None:
-            return (self.TELEGRAM_SUPERADMIN_ID,)
         return ()
 
     def telegram_max_file_bytes(self) -> int:
@@ -134,13 +129,6 @@ class Settings(BaseSettings):
     def valid_superadmin_telegram_ids(cls, value: str | None) -> str | None:
         if value is not None:
             parse_superadmin_telegram_ids(value)
-        return value
-
-    @field_validator("TELEGRAM_SUPERADMIN_ID")
-    @classmethod
-    def valid_telegram_id(cls, value: int | None) -> int | None:
-        if value is not None and (value <= 0 or value > _MAX_TELEGRAM_ID):
-            raise ValueError("TELEGRAM_SUPERADMIN_ID must be a positive 64-bit integer")
         return value
 
     @model_validator(mode="after")

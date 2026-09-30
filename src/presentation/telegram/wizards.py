@@ -55,7 +55,7 @@ from presentation.telegram.constants import (
     TLS_ACTIONS,
 )
 from presentation.telegram.datetime_format import timezone_label
-from presentation.telegram.formatting import TelegramHtml, code, escaped
+from presentation.telegram.formatting import TelegramHtml, code
 from presentation.telegram.i18n import t
 from presentation.telegram.keyboards import (
     admins_menu,
@@ -815,7 +815,7 @@ class WizardMixin(LanguageHelpMixin):
         if current is None:
             await self.transport.send_text(user.telegram_user_id, prompt, buttons=buttons)
             return
-        current_label = escaped(t(user.language_code, "current_value"))
+        current_label = t(user.language_code, "current_value")
         message = TelegramHtml(f"{prompt}\n\n{current_label}\n{code(current)}")
         await self.transport.send_text(user.telegram_user_id, message, buttons=buttons)
 

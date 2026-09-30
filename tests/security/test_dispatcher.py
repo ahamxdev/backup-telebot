@@ -79,7 +79,7 @@ async def test_admin_cannot_spoof_superadmin_button(database: Database, settings
     dispatcher = TelegramDispatcher(database.session_factory, TelegramTransport(client), settings)
     await dispatcher.handle(Event(2002, "➕ Add Admin"))
     assert len(client.messages) == 1
-    assert "not available" in client.messages[0][1]
+    assert "Option Unavailable" in client.messages[0][1]
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_language_switch_is_immediate_and_persisted(
     dispatcher = TelegramDispatcher(database.session_factory, TelegramTransport(client), settings)
     await dispatcher.handle(Event(1001, "🌐 Language"))
     await dispatcher.handle(Event(1001, "🇮🇷 فارسی"))
-    assert client.messages[-1][1] == "زبان بروزرسانی شد."
+    assert client.messages[-1][1] == ("✅ <b>زبان بروزرسانی شد</b>\nانتخاب شما ذخیره شد.")
     async with database.session_factory() as session:
         user = await UserRepository(session).by_telegram_id(1001)
         assert user is not None
@@ -149,7 +149,7 @@ async def test_admin_cards_have_bound_opaque_inline_actions(
     assert "Server Team" in client.messages[0][1]
     assert "Production DB" in client.messages[0][1]
     assert "Office Admin" in client.messages[1][1]
-    assert "📦 Allowed Backups\nNone" in client.messages[1][1]
+    assert "📦 <b>Allowed Backups:</b> None" in client.messages[1][1]
 
     edit_button = client.messages[0][2][0][0]
     assert edit_button.data.startswith(b"v1:")

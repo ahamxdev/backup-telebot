@@ -1,3 +1,5 @@
+from presentation.telegram.i18n.message import section
+
 STRINGS: dict[str, str] = {
     "backups": "💾 بکاپ‌ها",
     "admins": "👥 ادمین‌ها",
@@ -27,6 +29,9 @@ STRINGS: dict[str, str] = {
     "delete_backup": "🗑 حذف بکاپ",
     "refresh_backups": "📋 بروزرسانی بکاپ‌ها",
     "active_runs": "⚙️ اجراهای فعال",
+    "active_runs_footer": section(
+        "🧭", "بکاپ‌های فعال", "از کنترل‌های بالا استفاده کنید یا به منوی بکاپ‌ها بازگردید."
+    ),
     "run_history": "📜 تاریخچه اجراها",
     "run_details": "🔎 جزئیات",
     "cancel_run": "⛔ لغو اجرا",
@@ -49,63 +54,75 @@ STRINGS: dict[str, str] = {
     "confirm": "✅ تأیید",
     "previous_page": "◀️ قبلی",
     "next_page": "بعدی ▶️",
-    "welcome": "خوش آمدید.",
-    "cancelled": "عملیات لغو شد.",
-    "returned": "به خانه بازگشتید.",
-    "choose_menu": "لطفاً یکی از گزینه‌های منو را انتخاب کنید.",
-    "invalid": "ورودی نامعتبر است؛ دوباره تلاش کنید.",
-    "too_many_invalid": "تعداد ورودی نامعتبر زیاد بود؛ عملیات لغو شد.",
-    "expired": "زمان عملیات به پایان رسیده است.",
-    "no_choices": "موردی برای انتخاب وجود ندارد.",
-    "language_prompt": "زبان را انتخاب کنید:",
-    "language_saved": "زبان بروزرسانی شد.",
-    "admins_title": "مدیریت ادمین‌ها",
-    "no_admins": "ادمینی یافت نشد.",
+    "welcome": section(
+        "👋", "خوش آمدید", "بکاپ‌ها، اجراها، سرورها و دسترسی‌ها را از منوی زیر مدیریت کنید."
+    ),
+    "cancelled": section("❎", "عملیات لغو شد", "هیچ تغییری ذخیره نشد."),
+    "returned": section("🏠", "خانه", "یکی از گزینه‌های منوی زیر را انتخاب کنید."),
+    "choose_menu": section("🧭", "منوی اصلی", "یکی از گزینه‌های زیر را انتخاب کنید."),
+    "invalid": section("⚠️", "ورودی نامعتبر", "مقدار را بررسی و دوباره تلاش کنید."),
+    "too_many_invalid": section(
+        "⛔", "عملیات لغو شد", "تعداد تلاش‌های نامعتبر زیاد بود. عملیات را دوباره آغاز کنید."
+    ),
+    "expired": section("⌛", "نشست منقضی شد", "عملیات را دوباره آغاز کنید."),
+    "no_choices": section(
+        "ℹ️", "موردی برای انتخاب نیست", "در حال حاضر گزینه واجد شرایطی وجود ندارد."
+    ),
+    "language_prompt": section("🌐", "زبان", "زبان دلخواه خود را انتخاب کنید."),
+    "language_saved": section("✅", "زبان بروزرسانی شد", "انتخاب شما ذخیره شد."),
+    "admins_title": section("👥", "دسترسی ادمین‌ها", "ادمین‌ها و دسترسی بکاپ آن‌ها را مدیریت کنید."),
+    "no_admins": section("👥", "ادمینی وجود ندارد", "هنوز حساب ادمینی ساخته نشده است."),
     "admin_card": (
-        "👤 جزئیات ادمین\n\n━━━━━━━━━━━━━━\n📌 نام\n<code>{name}</code>\n\n"
-        "🆔 شناسه تلگرام\n<code>{telegram_id}</code>\n\n✅ وضعیت\n{status}\n\n"
-        "🌐 زبان\n{admin_language}\n\n━━━━━━━━━━━━━━\n📦 بکاپ‌های مجاز\n{backups}\n\n"
-        "━━━━━━━━━━━━━━"
+        "👤 <b>جزئیات ادمین</b>\n━━━━━━━━━━━━━━\n📌 <b>نام:</b> <code>{name}</code>\n"
+        "🆔 <b>شناسه تلگرام:</b> <code>{telegram_id}</code>\n✅ <b>وضعیت:</b> {status}\n"
+        "🌐 <b>زبان:</b> {admin_language}\n━━━━━━━━━━━━━━\n"
+        "📦 <b>بکاپ‌های مجاز:</b> {backups}\n━━━━━━━━━━━━━━"
     ),
     "enabled": "فعال",
     "disabled": "غیرفعال",
     "none": "هیچ‌کدام",
     "language_en": "انگلیسی",
     "language_fa": "فارسی",
-    "ask_admin_name": "نام نمایشی را وارد کنید:",
-    "ask_telegram_id": "شناسه عددی تلگرام را وارد کنید:",
-    "ask_admin_language": "زبان ترجیحی ادمین را انتخاب کنید:",
+    "ask_admin_name": section("👤", "نام ادمین", "نام نمایشی را وارد کنید."),
+    "ask_telegram_id": section("🆔", "شناسه تلگرام", "شناسه عددی کاربر تلگرام را وارد کنید."),
+    "ask_admin_language": section("🌐", "زبان ادمین", "زبان دلخواه ادمین را انتخاب کنید."),
     "admin_confirmation": (
-        "نام: {name}\nشناسه تلگرام: {telegram_id}\nزبان: {admin_language}\n\nاین ادمین ساخته شود؟"
+        "👤 <b>تأیید ادمین</b>\nنام: <code>{name}</code>\nشناسه تلگرام: "
+        "<code>{telegram_id}</code>\nزبان: {admin_language}\nاین ادمین ساخته شود؟"
     ),
-    "admin_created_access": "ادمین ساخته شد. دسترسی بکاپ را تعیین کنید:",
-    "admin_saved": "ادمین و دسترسی‌ها ذخیره شدند.",
-    "select_admin_edit": "ادمین را برای ویرایش انتخاب کنید:",
-    "select_admin_delete": "ادمین را برای حذف انتخاب کنید:",
-    "edit_admin_prompt": "نوع ویرایش را انتخاب کنید:",
-    "ask_new_name": "نام جدید را وارد کنید:",
-    "ask_new_telegram_id": "شناسه تلگرام جدید را وارد کنید:",
-    "admin_updated": "ادمین ویرایش شد.",
-    "admin_status_changed": "وضعیت ادمین تغییر کرد.",
+    "admin_created_access": section("✅", "ادمین ساخته شد", "اکنون دسترسی بکاپ را تعیین کنید."),
+    "admin_saved": section("✅", "ادمین ذخیره شد", "حساب و دسترسی‌های بکاپ بروزرسانی شدند."),
+    "select_admin_edit": section("✏️", "ویرایش ادمین", "یک ادمین را انتخاب کنید."),
+    "select_admin_delete": section("🗑", "حذف ادمین", "یک ادمین را انتخاب کنید."),
+    "edit_admin_prompt": section("✏️", "ویرایش ادمین", "بخش موردنظر را انتخاب کنید."),
+    "ask_new_name": section("👤", "نام جدید", "نام نمایشی جدید ادمین را وارد کنید."),
+    "ask_new_telegram_id": section("🆔", "شناسه تلگرام جدید", "شناسه عددی جدید را وارد کنید."),
+    "admin_updated": section("✅", "ادمین بروزرسانی شد", "مشخصات ادمین ذخیره شد."),
+    "admin_status_changed": section("✅", "وضعیت بروزرسانی شد", "وضعیت ادمین تغییر کرد."),
     "admin_delete_summary": (
-        "این ادمین حذف و غیرفعال شود؟\n\nادمین: {name}\nشناسه تلگرام: {telegram_id}\n"
-        "وضعیت: {status}\nزبان: {admin_language}"
+        "⚠️ <b>ادمین حذف شود؟</b>\nادمین: <code>{name}</code>\nشناسه تلگرام: "
+        "<code>{telegram_id}</code>\nوضعیت: {status}\nزبان: {admin_language}\n"
+        "دسترسی‌ها لغو و حساب غیرفعال می‌شود."
     ),
-    "admin_deleted": "ادمین حذف و غیرفعال شد و دسترسی‌ها لغو شدند.",
-    "select_backup_access": "بکاپ‌های مجاز را انتخاب کنید:",
-    "access_saved": "دسترسی‌ها بروزرسانی شدند.",
-    "no_active_operations": "در حال حاضر هیچ عملیات بکاپی در حال اجرا نیست.",
-    "active_runs_overview": "در حال حاضر {count} اجرای بکاپ فعال است.",
-    "active_runs_title": "اجراهای فعال بکاپ: {count}",
-    "no_run_history": "تاریخچه‌ای برای اجرای بکاپ وجود ندارد.",
-    "run_history_header": "تاریخچه اجراها — صفحه {page} از {pages} (مجموع {total})",
-    "run_history_footer": "پیمایش تاریخچه اجراها",
+    "admin_deleted": section("✅", "ادمین حذف شد", "حساب غیرفعال و دسترسی‌ها لغو شدند."),
+    "select_backup_access": section("📦", "دسترسی بکاپ", "بکاپ‌های مجاز این ادمین را انتخاب کنید."),
+    "access_saved": section("✅", "دسترسی بروزرسانی شد", "تخصیص دسترسی‌ها ذخیره شد."),
+    "no_active_operations": section(
+        "✅", "بکاپ فعالی وجود ندارد", "در حال حاضر هیچ عملیات بکاپی در حال اجرا نیست."
+    ),
+    "active_runs_overview": section("⚙️", "بکاپ‌های فعال", "در حال حاضر {count} اجرا فعال است."),
+    "active_runs_title": section("⚙️", "اجراهای فعال بکاپ", "تعداد فعال: <code>{count}</code>"),
+    "no_run_history": section("📜", "تاریخچه‌ای وجود ندارد", "هنوز اجرای بکاپی ثبت نشده است."),
+    "run_history_header": section(
+        "📜", "تاریخچه اجراها", "صفحه {page} از {pages} · مجموع <code>{total}</code>"
+    ),
+    "run_history_footer": section("🧭", "تاریخچه اجراها", "با دکمه‌های زیر جابه‌جا شوید."),
     "size_unknown": "نامشخص",
     "run_size_summary": "📦 اندازه اصلی بکاپ: {original_size}\n🗜 اندازه نهایی بکاپ: {final_size}",
     "run_list_card": (
-        "🔎 اجرا #<code>{run_id}</code> · <code>{profile}</code>\n\n━━━━━━━━━━━━━━\n"
-        "✅ وضعیت\n{status}\n\n⚙️ مرحله\n{stage}\n\n🕒 ایجاد\n{created}"
-        "{size_summary}\n\n━━━━━━━━━━━━━━"
+        "🔎 <b>اجرای شماره <code>{run_id}</code></b> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
+        "✅ <b>وضعیت:</b> {status}\n⚙️ <b>مرحله:</b> {stage}\n🕒 <b>ایجاد:</b> {created}"
+        "{size_summary}\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>جزئیات اجرای بکاپ</b>\n━━━━━━━━━━━━━━\n🆔 <b>شناسه اجرا:</b> <code>{run_id}</code>\n"
@@ -122,19 +139,24 @@ STRINGS: dict[str, str] = {
         "در انتظار: <code>{pending}</code> · موفق: <code>{succeeded}</code>\n"
         "ناموفق: <code>{failed}</code> · ردشده: <code>{skipped}</code>\n━━━━━━━━━━━━━━"
     ),
-    "run_cancel_requested": "درخواست لغو اجرای شماره <code>{run_id}</code> ثبت شد.",
-    "run_delivery_retry_requested": (
-        "تحویل‌های ناموفق اجرای شماره <code>{run_id}</code> با ایمنی در صف قرار گرفت."
+    "run_cancel_requested": section(
+        "⛔", "درخواست لغو ثبت شد", "اجرای شماره <code>{run_id}</code> به‌شکل ایمن متوقف می‌شود."
     ),
-    "run_retry_queued": "اجرای مجدد با شماره <code>{run_id}</code> در صف قرار گرفت.",
+    "run_delivery_retry_requested": (
+        "🔁 <b>تلاش مجدد تحویل در صف است</b>\nتحویل‌های ناموفق اجرای شماره "
+        "<code>{run_id}</code> دوباره انجام می‌شوند."
+    ),
+    "run_retry_queued": section("✅", "تلاش مجدد در صف است", "اجرای جدید: <code>{run_id}</code>"),
     "run_artifact_purge_complete": (
-        "فایل نگهداری‌شده و تأییدشده اجرای شماره <code>{run_id}</code> پاک شد."
+        "✅ <b>فایل پاک شد</b>\nفایل نگهداری‌شده اجرای شماره <code>{run_id}</code> حذف شد."
     ),
     "run_artifact_purge_confirm": (
-        "فایل نگهداری‌شده و تأییدشده اجرای شماره <code>{run_id}</code> برای همیشه پاک شود؟ "
-        "تاریخچه پایگاه داده حفظ خواهد شد."
+        "⚠️ <b>فایل نگهداری‌شده پاک شود؟</b>\nفایل تأییدشده اجرای شماره "
+        "<code>{run_id}</code> برای همیشه حذف شود؟ تاریخچه پایگاه داده حفظ می‌شود."
     ),
-    "run_action_unavailable": "این عملیات دیگر در دسترس یا ایمن نیست.",
+    "run_action_unavailable": section(
+        "⚠️", "عملیات در دسترس نیست", "این اقدام دیگر قابل انجام یا ایمن نیست."
+    ),
     "run_artifact_retained": "نگهداری‌شده ({size:,} بایت)",
     "run_artifact_purged": "پاک‌شده؛ تاریخچه پایگاه داده حفظ شده است",
     "run_artifact_delivered": "تحویل کامل ({size:,} بایت)",
@@ -164,7 +186,10 @@ STRINGS: dict[str, str] = {
     "run_stage_telegram_delivery": "تحویل تلگرام",
     "run_stage_cleanup": "پاک‌سازی",
     "run_stage_complete": "کامل",
-    "no_backups": "بکاپی یافت نشد.",
+    "no_backups": section("📦", "پروفایل بکاپی وجود ندارد", "هنوز پروفایل بکاپی ساخته نشده است."),
+    "backups_title": section(
+        "📦", "پروفایل‌های بکاپ", "پروفایل‌ها، اجراها و دسترسی‌ها را مدیریت کنید."
+    ),
     "backup_card": (
         "📦 <b>پروفایل بکاپ</b>\n━━━━━━━━━━━━━━\n📌 <b>نام:</b> <code>{name}</code>\n"
         "📁 <b>منبع:</b> {source}\n🖥 <b>سرور ریموت:</b> <code>{server}</code>\n"
@@ -181,13 +206,17 @@ STRINGS: dict[str, str] = {
         "📝 <b>توضیحات</b>\nتوضیحات جدید را وارد کنید؛ برای حفظ <code>-</code> و "
         "برای پاک‌کردن <code>!</code> بفرستید."
     ),
-    "ask_edit_database_" + "password": (
-        "گذرواژه جدید پایگاه داده را وارد کنید یا برای حفظ گذرواژه فعلی «-» بفرستید:"
+    "ask_edit_database_" + "password": section(
+        "🔐",
+        "گذرواژه پایگاه داده",
+        "مقدار جدید را وارد کنید یا برای حفظ فعلی <code>-</code> بفرستید.",
     ),
-    "ask_edit_age_" + "passphrase": (
-        "گذرواژه جدید Age را وارد کنید یا برای حفظ گذرواژه فعلی «-» بفرستید:"
+    "ask_edit_age_" + "passphrase": section(
+        "🔐", "گذرواژه Age", "مقدار جدید را وارد کنید یا برای حفظ فعلی <code>-</code> بفرستید."
     ),
-    "edit_keep_hint": "در این ویرایش، برای حفظ مقدار غیرمحرمانه فعلی «-» بفرستید.",
+    "edit_keep_hint": section(
+        "ℹ️", "ویرایش", "برای حفظ مقدار غیرمحرمانه فعلی <code>-</code> بفرستید."
+    ),
     "ask_description": (
         "📝 <b>توضیحات</b>\nتوضیحات را وارد کنید یا برای خالی گذاشتن <code>-</code> بفرستید."
     ),
@@ -252,27 +281,33 @@ STRINGS: dict[str, str] = {
     "encryption_none": "بدون رمزگذاری",
     "encryption_age_public": "کلید عمومی Age — پیشنهادی",
     "encryption_age_" + "passphrase": "گذرواژه Age",
-    "ask_server_name": "نام یکتای سرور را وارد کنید:",
-    "ask_server_host": "نام میزبان یا IP را وارد کنید:",
-    "ask_server_port": "پورت SSH را وارد کنید:",
-    "ask_server_username": "نام کاربری SSH را وارد کنید:",
+    "ask_server_name": section("🖥", "نام سرور", "نامی یکتا برای سرور وارد کنید."),
+    "ask_server_host": section("🌐", "نشانی سرور", "نام میزبان یا نشانی IP را وارد کنید."),
+    "ask_server_port": section("🔌", "پورت SSH", "شماره پورت SSH را وارد کنید."),
+    "ask_server_username": section("👤", "نام کاربری SSH", "نام حساب SSH را وارد کنید."),
     "ask_server_private_key": (
-        "کلید خصوصی SSH را ارسال کنید؛ رمزگذاری می‌شود و دیگر نمایش داده نخواهد شد:"
+        "🔐 <b>کلید خصوصی SSH</b>\nکلید را ارسال کنید؛ رمزگذاری می‌شود و دیگر نمایش داده نمی‌شود."
     ),
-    "ask_server_" + "passphrase": "گذرواژه کلید خصوصی را وارد کنید یا «-» بفرستید:",
-    "ask_server_name_edit": "نام جایگزین سرور را وارد کنید:",
+    "ask_server_" + "passphrase": section(
+        "🔑", "گذرواژه کلید", "گذرواژه را وارد کنید یا اگر ندارد <code>-</code> بفرستید."
+    ),
+    "ask_server_name_edit": section("🖥", "نام سرور", "نام جایگزین را وارد کنید."),
     "server_fingerprint_confirm": (
-        "اتصال موفق بود. به اثرانگشت دقیق کلید میزبان SSH اعتماد می‌کنید؟\n\n{fingerprint}"
+        "🛡 <b>اعتماد به کلید میزبان SSH؟</b>\nاتصال موفق بود. این اثرانگشت را بررسی و تأیید کنید:\n"
+        "<code>{fingerprint}</code>"
     ),
-    "server_saved": "سرور ریموت با بررسی ثابت کلید میزبان ذخیره شد.",
-    "server_updated": "سرور ریموت پس از اعتماد به اثرانگشت جدید به‌روزرسانی شد.",
-    "edit_server_prompt": "نحوه ویرایش سرور ریموت را انتخاب کنید:",
+    "server_saved": section("✅", "سرور ذخیره شد", "بررسی کلید میزبان SSH ثابت شد."),
+    "server_updated": section("✅", "سرور بروزرسانی شد", "کلید میزبان جدید تأیید و ثابت شد."),
+    "edit_server_prompt": section("✏️", "ویرایش سرور ریموت", "بخش موردنظر را انتخاب کنید."),
     "reconfigure_server": "🔐 جایگزینی اطلاعات اتصال",
-    "server_status_changed": "وضعیت سرور ریموت تغییر کرد.",
-    "server_deleted": "سرور ریموت حذف شد.",
-    "server_test_ok": "اتصال موفق بود و کلید میزبان مطابقت دارد.",
-    "servers_title": "مدیریت سرورهای ریموت",
-    "no_servers": "سرور ریموتی یافت نشد.",
+    "server_status_changed": section("✅", "وضعیت بروزرسانی شد", "وضعیت سرور ریموت تغییر کرد."),
+    "server_deleted": section("✅", "سرور حذف شد", "سرور ریموت حذف شد."),
+    "server_delete_prompt": section(
+        "⚠️", "سرور ریموت حذف شود؟", "سرور زیر را بررسی و سپس حذف همیشگی را تأیید کنید."
+    ),
+    "server_test_ok": section("✅", "اتصال تأیید شد", "اتصال SSH برقرار و کلید میزبان منطبق است."),
+    "servers_title": section("🖥", "سرورهای ریموت", "سرورهای مورد اعتماد منبع بکاپ را مدیریت کنید."),
+    "no_servers": section("🖥", "سرور ریموتی وجود ندارد", "هنوز سرور ریموتی اضافه نشده است."),
     "server_card": (
         "🖥 <b>جزئیات سرور ریموت</b>\n━━━━━━━━━━━━━━\n"
         "📌 <b>نام سرور:</b> <code>{name}</code>\n"
@@ -281,19 +316,27 @@ STRINGS: dict[str, str] = {
         "🛡 <b>اثرانگشت:</b> <code>{fingerprint}</code>\n✅ <b>وضعیت:</b> {status}\n━━━━━━━━━━━━━━"
     ),
     "ssh_private_key": "کلید خصوصی SSH",
-    "choose_database_engine": "یک موتور پایگاه داده انتخاب کنید:",
-    "choose_tls": "حالت TLS/SSL پایگاه داده را انتخاب کنید:",
-    "ask_tls_ca": "گواهی CA مورد اعتماد را با قالب PEM ارسال کنید:",
-    "ask_database_host": "میزبان پایگاه داده را وارد کنید:",
-    "ask_database_port": "پورت پایگاه داده را وارد کنید:",
-    "ask_database_name": "نام دقیق یک پایگاه داده را وارد کنید:",
-    "ask_database_username": "نام کاربری پایگاه داده را وارد کنید:",
-    "ask_database_" + "password": "گذرواژه پایگاه داده را وارد کنید؛ دیگر نمایش داده نخواهد شد:",
-    "ask_mssql_docker": "آیا SQL Server داخل Docker اجرا می‌شود؟",
-    "ask_mssql_backup_path": "مسیر مقصد بکاپ SQL Server/کانتینر را وارد کنید:",
-    "ask_mssql_host_path": "مسیر متناظر mount شده روی میزبان ریموت را وارد کنید:",
-    "choose_location": "محل منبع فایل/پوشه را انتخاب کنید:",
-    "ask_paths": "یک یا چند مسیر مطلق فایل / پوشه، هرکدام در یک خط وارد کنید:",
+    "choose_database_engine": section("🗄", "موتور پایگاه داده", "یک نوع پایگاه داده انتخاب کنید."),
+    "choose_tls": section("🛡", "TLS پایگاه داده", "حالت بررسی TLS/SSL را انتخاب کنید."),
+    "ask_tls_ca": section("📜", "مرجع CA مورد اعتماد", "گواهی CA را با قالب PEM ارسال کنید."),
+    "ask_database_host": section(
+        "🌐", "میزبان پایگاه داده", "نام میزبان یا نشانی IP را وارد کنید."
+    ),
+    "ask_database_port": section("🔌", "پورت پایگاه داده", "شماره پورت را وارد کنید."),
+    "ask_database_name": section("🗄", "نام پایگاه داده", "نام دقیق یک پایگاه داده را وارد کنید."),
+    "ask_database_username": section("👤", "نام کاربری پایگاه داده", "نام حساب بکاپ را وارد کنید."),
+    "ask_database_" + "password": section(
+        "🔐", "گذرواژه پایگاه داده", "گذرواژه را وارد کنید؛ دیگر نمایش داده نمی‌شود."
+    ),
+    "ask_mssql_docker": section("🐳", "محیط SQL Server", "آیا SQL Server در Docker اجرا می‌شود؟"),
+    "ask_mssql_backup_path": section(
+        "📂", "مسیر بکاپ SQL Server", "مسیر مقصد داخل SQL Server یا کانتینر آن را وارد کنید."
+    ),
+    "ask_mssql_host_path": section(
+        "📂", "مسیر میزبان ریموت", "مسیر mount متناظر روی میزبان ریموت را وارد کنید."
+    ),
+    "choose_location": section("📍", "مکان منبع", "محل فایل‌ها یا پوشه‌ها را انتخاب کنید."),
+    "ask_paths": section("📂", "فایل‌ها و پوشه‌ها", "مسیرهای مطلق را هرکدام در یک خط وارد کنید."),
     "choose_gitlab_location": "📍 <b>مکان گیت‌لب</b>\nاین نمونه گیت‌لب کجا اجرا می‌شود؟",
     "ask_gitlab_container": "🐳 <b>کانتینر گیت‌لب</b>\nنام کانتینر Docker را وارد کنید.",
     "ask_gitlab_worker_path": (
@@ -306,16 +349,32 @@ STRINGS: dict[str, str] = {
         "ریشه‌های قابل مشاهده و مجاز:\n{available_roots}"
     ),
     "gitlab_worker_path_invalid_path": (
-        "مسیر باید مطلق باشد و نباید پیمایش مسیر مانند <code>..</code> داشته باشد."
+        "⚠️ <b>مسیر بکاپ نامعتبر است</b>\nمسیر باید مطلق و بدون پیمایش مانند <code>..</code> باشد."
     ),
-    "gitlab_worker_path_container_escape": "مسیر خارج از ریشه‌های مجاز worker است.",
-    "gitlab_worker_path_denied_root": "مسیر داخل بخش محافظت‌شده فایل‌سیستم است.",
-    "gitlab_worker_path_not_found": "پوشه داخل worker بکاپ وجود ندارد.",
-    "gitlab_worker_path_not_directory": "مسیر داخل worker بکاپ یک پوشه نیست.",
-    "gitlab_worker_path_not_writable": "پوشه داخل worker بکاپ قابل نوشتن نیست.",
-    "gitlab_worker_path_symlink_escape": "مسیر ناامن است یا از پیوند نمادین استفاده می‌کند.",
-    "gitlab_worker_path_invalid_configuration": "تنظیمات mount محلی نامعتبر است.",
-    "gitlab_worker_path_root_not_allowed": "ریشه فایل‌سیستم نمی‌تواند مجاز شود.",
+    "gitlab_worker_path_container_escape": section(
+        "⚠️", "مسیر مجاز نیست", "مسیر خارج از ریشه‌های قابل مشاهده و مجاز worker است."
+    ),
+    "gitlab_worker_path_denied_root": section(
+        "⛔", "مسیر محافظت‌شده", "مسیر داخل بخش محافظت‌شده فایل‌سیستم است."
+    ),
+    "gitlab_worker_path_not_found": section(
+        "⚠️", "پوشه پیدا نشد", "پوشه داخل worker بکاپ قابل مشاهده نیست."
+    ),
+    "gitlab_worker_path_not_directory": section(
+        "⚠️", "پوشه لازم است", "مسیر قابل مشاهده در worker یک پوشه نیست."
+    ),
+    "gitlab_worker_path_not_writable": section(
+        "⚠️", "دسترسی نوشتن لازم است", "پوشه داخل worker بکاپ قابل نوشتن نیست."
+    ),
+    "gitlab_worker_path_symlink_escape": section(
+        "⛔", "مسیر ناامن", "پیوند نمادین و خروج از مسیر مجاز نیست."
+    ),
+    "gitlab_worker_path_invalid_configuration": section(
+        "⚠️", "خطای تنظیم mount", "نگاشت mount محلی نامعتبر است؛ با اپراتور تماس بگیرید."
+    ),
+    "gitlab_worker_path_root_not_allowed": section(
+        "⛔", "ریشه رد شد", "ریشه فایل‌سیستم نمی‌تواند منبع مجاز باشد."
+    ),
     "ask_gitlab_remote_path": ("📂 <b>پوشه بکاپ گیت‌لب</b>\nمسیر پوشه روی سرور ریموت را وارد کنید."),
     "no_remote_servers_available": (
         "⚠️ <b>سرور ریموتی در دسترس نیست</b>\n"
@@ -323,23 +382,37 @@ STRINGS: dict[str, str] = {
         "ابتدا یک سرور ریموت اضافه کنید یا میزبان محلی را انتخاب کنید."
     ),
     "gitlab_exclusive_warning": (
-        "⚠️ پوشه پشتیبان گیت‌لب منحصراً توسط این پروفایل مدیریت می‌شود. فایل‌های موجود "
-        "پیش از هر پشتیبان جدید حذف می‌شوند.\n\nبرای بازیابی کامل، gitlab.rb و "
-        "gitlab-secrets.json را جداگانه پشتیبان‌گیری کنید."
+        "⚠️ <b>پوشه اختصاصی بکاپ</b>\nاین پوشه گیت‌لب منحصراً توسط این پروفایل مدیریت "
+        "می‌شود و فایل‌های موجود پیش از هر بکاپ حذف می‌شوند.\nبرای بازیابی کامل، "
+        "<code>gitlab.rb</code> و <code>gitlab-secrets.json</code> را جداگانه بکاپ بگیرید."
     ),
     "gitlab_source_details": (
         "\n🦊 <b>منبع گیت‌لب</b>\n📍 <b>مکان:</b> {location}"
         "\n<b>کانتینر:</b> {container}\n<b>مسیر پشتیبان:</b> {backup_path}"
     ),
-    "choose_schedule": "زمان‌بندی را انتخاب کنید. زمان‌ها بر اساس منطقه زمانی بکاپ هستند: {timezone}",
-    "ask_schedule_interval": "N را به‌صورت عدد صحیح مثبت وارد کنید:",
-    "ask_schedule_daily": "زمان را به‌شکل HH:MM وارد کنید:",
-    "ask_schedule_weekly": "روز هفته (۰=دوشنبه تا ۶=یکشنبه) و زمان را وارد کنید: 0 HH:MM",
-    "ask_schedule_monthly": "روز ماه (۱ تا ۲۸) و زمان را وارد کنید: 1 HH:MM",
+    "choose_schedule": section(
+        "⏰",
+        "زمان‌بندی بکاپ",
+        "زمان‌بندی را انتخاب کنید. زمان‌ها بر اساس <code>{timezone}</code> هستند.",
+    ),
+    "ask_schedule_interval": section("🔁", "فاصله اجرا", "یک عدد صحیح مثبت وارد کنید."),
+    "ask_schedule_daily": section(
+        "🕒", "زمان روزانه", "زمان را به‌شکل <code>HH:MM</code> وارد کنید."
+    ),
+    "ask_schedule_weekly": section(
+        "📅",
+        "زمان‌بندی هفتگی",
+        "روز و زمان را به‌شکل <code>0 HH:MM</code> وارد کنید (۰=دوشنبه، ۶=یکشنبه).",
+    ),
+    "ask_schedule_monthly": section(
+        "📅", "زمان‌بندی ماهانه", "روز و زمان را به‌شکل <code>1 HH:MM</code> وارد کنید (روز ۱ تا ۲۸)."
+    ),
     "choose_remote_server": "🌐 <b>سرور ریموت</b>\nسرور میزبان این منبع را انتخاب کنید.",
-    "choose_assigned_admins": "ادمین‌ها را انتخاب کنید و سپس ذخیره دسترسی را بزنید:",
+    "choose_assigned_admins": section(
+        "👥", "دسترسی ادمین‌ها", "ادمین‌ها را انتخاب و سپس ذخیره دسترسی را بزنید."
+    ),
     "archive_explanation": (
-        "📦 قالب آرشیو\n\nآرشیو چند فایل را در یک بسته گروه‌بندی می‌کند و الزاماً حجم را "
+        "📦 <b>قالب آرشیو</b>\nآرشیو چند فایل را در یک بسته گروه‌بندی می‌کند و الزاماً حجم را "
         "کم نمی‌کند؛ فشرده‌سازی جداگانه انتخاب می‌شود.\n\n━━━━━━━━━━━━━━\n"
         "🗃 TAR (پیشنهادی)\n• پسوند: .tar\n• حفظ متادیتای Unix\n"
         "• سازگاری: عالی در لینوکس و macOS و گسترده در سایر سیستم‌ها\n"
@@ -352,7 +425,7 @@ STRINGS: dict[str, str] = {
         "• مناسب برای: محیط‌های دارای ابزار تخصصی"
     ),
     "compression_explanation": (
-        "🗜 فشرده‌سازی\n\nفشرده‌سازی حجم آرشیو را کم می‌کند و مستقل از قالب آرشیو است. "
+        "🗜 <b>فشرده‌سازی</b>\nفشرده‌سازی حجم آرشیو را کم می‌کند و مستقل از قالب آرشیو است. "
         "نسبت بیشتر معمولاً زمان و پردازنده بیشتری می‌خواهد.\n\n━━━━━━━━━━━━━━\n"
         "◻️ بدون فشرده‌سازی · بدون پسوند · سریع‌ترین · پردازنده ناچیز\n"
         "🚀 Zstandard · .zst · نسبت زیاد · سریع · پردازنده متوسط\n"
@@ -366,12 +439,14 @@ STRINGS: dict[str, str] = {
         "تنظیمات بکاپ تغییر نکرده است."
     ),
     "choose_compression_preset": (
-        "🗜 پیش‌تنظیم فشرده‌سازی\n\nتعادل سرعت و حجم را انتخاب کنید. حالت متعادل پیشنهاد می‌شود."
+        "🗜 <b>پیش‌تنظیم فشرده‌سازی</b>\nتعادل سرعت و حجم را انتخاب کنید. حالت متعادل پیشنهاد می‌شود."
     ),
-    "choose_encryption": "روش رمزگذاری را انتخاب کنید:",
-    "ask_age_recipients": "کلیدهای عمومی گیرنده Age را هرکدام در یک خط وارد کنید:",
+    "choose_encryption": section("🔐", "رمزگذاری", "روش حفاظت از بکاپ نهایی را انتخاب کنید."),
+    "ask_age_recipients": section(
+        "🔑", "گیرندگان Age", "کلیدهای عمومی را هرکدام در یک خط وارد کنید."
+    ),
     "ask_age_" + "passphrase": (
-        "گذرواژه Age را وارد کنید؛ رمزگذاری می‌شود و دیگر نمایش داده نخواهد شد:"
+        "🔐 <b>گذرواژه Age</b>\nگذرواژه را وارد کنید؛ رمزگذاری می‌شود و دیگر نمایش داده نمی‌شود."
     ),
     "profile_confirmation": (
         "📋 <b>تأیید پروفایل بکاپ</b>\n━━━━━━━━━━━━━━\n"
@@ -402,49 +477,105 @@ STRINGS: dict[str, str] = {
     "source_location_local": "میزبان محلی",
     "source_location_remote": "سرور ریموت",
     "backup_timezone": "🕓 منطقه زمانی بکاپ",
-    "ask_backup_timezone": "منطقه زمانی IANA بکاپ را وارد کنید (برای نمونه Asia/Tehran):",
+    "timezone_heading": "منطقه زمانی",
+    "ask_backup_timezone": section(
+        "🕓",
+        "منطقه زمانی بکاپ",
+        "منطقه زمانی IANA را وارد کنید؛ برای نمونه <code>Asia/Tehran</code>.",
+    ),
     "status_draft": "پیش‌نویس",
     "status_archived": "آرشیوشده",
-    "backup_created": "پیش‌نویس «{name}» ذخیره شد.",
-    "backup_setup_expired": ("⚠️ نشست راه‌اندازی منقضی شد. ساخت پروفایل بکاپ را دوباره آغاز کنید."),
-    "backup_confirm_missing": "⚠️ فیلد {field} تکمیل نشده است. به آن مرحله بازگردید.",
+    "backup_created": section(
+        "✅", "پروفایل بکاپ ذخیره شد", "پیش‌نویس <code>{name}</code> ساخته شد."
+    ),
+    "backup_setup_expired": (
+        "⌛ <b>راه‌اندازی منقضی شد</b>\nاین نشست پایان یافت؛ ساخت پروفایل را دوباره آغاز کنید."
+    ),
+    "backup_confirm_missing": (
+        "⚠️ <b>پروفایل ناقص است</b>\nفیلد <code>{field}</code> تکمیل نشده؛ به آن مرحله بازگردید."
+    ),
     "backup_confirm_invalid_state": (
-        "⚠️ این تأیید با مرحله فعلی هماهنگ نیست. پروفایل را دوباره بررسی کنید."
+        "⚠️ <b>تأیید هماهنگ نیست</b>\nاین تأیید با مرحله فعلی هماهنگ نیست؛ "
+        "پروفایل را دوباره بررسی کنید."
     ),
-    "backup_confirm_stale": "⚠️ این دکمه تأیید قدیمی است. از جدیدترین پیام تأیید استفاده کنید.",
+    "backup_confirm_stale": "⚠️ <b>تأیید قدیمی است</b>\nاز دکمه جدیدترین پیام تأیید استفاده کنید.",
     "backup_confirm_unavailable": (
-        "⚠️ ذخیره پروفایل موقتاً در دسترس نیست؛ ذخیره‌سازی امن پیکربندی نشده است."
+        "⚠️ <b>ذخیره در دسترس نیست</b>\nذخیره‌سازی امن پیکربندی نشده؛ با اپراتور تماس بگیرید."
     ),
-    "backup_confirm_validation_failed": "⚠️ اعتبارسنجی پروفایل ناموفق بود: {reason}",
-    "backup_confirm_save_failed": ("⚠️ پروفایل به‌دلیل خطای داخلی ذخیره نشد و تنظیمات پذیرفته نشد."),
-    "select_backup_edit": "بکاپ را برای ویرایش انتخاب کنید:",
-    "select_backup_delete": "بکاپ را برای حذف انتخاب کنید:",
-    "edit_backup_prompt": "نوع ویرایش را انتخاب کنید:",
-    "backup_updated": "بکاپ ویرایش شد.",
-    "backup_configuration_updated": "تنظیمات بکاپ «{name}» به‌صورت اتمیک بروزرسانی شد.",
-    "current_value": "مقدار فعلی:",
+    "backup_confirm_validation_failed": (
+        "⚠️ <b>اعتبارسنجی ناموفق بود</b>\nپروفایل را بررسی کنید: {reason}"
+    ),
+    "backup_confirm_save_failed": (
+        "⚠️ <b>پروفایل ذخیره نشد</b>\nخطای داخلی رخ داد و هیچ تغییری پذیرفته نشد."
+    ),
+    "select_backup_edit": section("✏️", "ویرایش بکاپ", "یک پروفایل بکاپ انتخاب کنید."),
+    "select_backup_delete": section("🗑", "حذف بکاپ", "یک پروفایل بکاپ انتخاب کنید."),
+    "edit_backup_prompt": section("✏️", "ویرایش بکاپ", "بخش موردنظر را انتخاب کنید."),
+    "backup_updated": section("✅", "بکاپ بروزرسانی شد", "تغییرات پروفایل ذخیره شد."),
+    "backup_configuration_updated": section(
+        "✅", "تنظیمات بروزرسانی شد", "بکاپ <code>{name}</code> به‌صورت اتمیک بروزرسانی شد."
+    ),
+    "current_value": "<b>مقدار فعلی:</b>",
     "existing_credential": (
-        "مقدار محرمانه موجود است — مقدار جدیدی وارد کنید یا مقدار موجود را نگه دارید."
+        "🔐 <b>اطلاعات محرمانه ذخیره شده</b>\nمقدار جدید وارد کنید یا مقدار موجود را نگه دارید."
     ),
-    "backup_status_changed": "وضعیت بکاپ تغییر کرد.",
-    "backup_run_queued": "بکاپ در صف قرار گرفت. اجرای شماره <code>{run_id}</code>.",
-    "backup_run_active": "یک اجرا فعال است: {stage}، شروع {started}.",
-    "backup_backpressure": "ایجاد بکاپ جدید متوقف است: فضای تحویل به حد ایمنی رسیده است.",
+    "backup_status_changed": section("✅", "وضعیت بروزرسانی شد", "وضعیت پروفایل بکاپ تغییر کرد."),
+    "backup_run_queued": section(
+        "✅", "بکاپ در صف است", "اجرای شماره <code>{run_id}</code> آماده شروع است."
+    ),
+    "backup_run_active": section("⚙️", "بکاپ در حال اجرا است", "مرحله: {stage}\nشروع: {started}"),
+    "backup_backpressure": section(
+        "⚠️", "بکاپ‌ها متوقف شده‌اند", "فضای تحویل به حد ایمنی تنظیم‌شده رسیده است."
+    ),
     "backup_delete_summary": (
-        "این بکاپ آرشیو شود؟\n\nنام: {name}\nنوع منبع: {source}\nوضعیت: {status}"
+        "⚠️ <b>بکاپ آرشیو شود؟</b>\nنام: <code>{name}</code>\nمنبع: {source}\n"
+        "وضعیت: {status}\nدسترسی‌های تخصیص‌یافته لغو می‌شوند."
     ),
-    "backup_deleted": "بکاپ آرشیو و دسترسی‌ها لغو شدند.",
-    "select_admin_access": "ادمین‌های مجاز را انتخاب کنید:",
-    "my_backups_title": "بکاپ‌های تخصیص‌یافته شما:",
-    "audit_empty": "گزارشی وجود ندارد.",
-    "help_text": "برای کار با ربات از دکمه‌های منو استفاده کنید.",
-    "permission_invalid": "این گزینه معتبر نیست و در دسترس شما قرار ندارد.",
+    "backup_deleted": section("✅", "بکاپ آرشیو شد", "دسترسی‌های تخصیص‌یافته لغو شدند."),
+    "select_admin_access": section(
+        "👥", "دسترسی ادمین‌ها", "ادمین‌های مجاز این بکاپ را انتخاب کنید."
+    ),
+    "my_backups_title": section("📦", "بکاپ‌های من", "یکی از پروفایل‌های تخصیص‌یافته را انتخاب کنید."),
+    "audit_empty": section("🧾", "رویدادی وجود ندارد", "هنوز فعالیتی ثبت نشده است."),
+    "audit_title": section("🧾", "گزارش فعالیت", "فعالیت‌های اخیر سامانه"),
+    "help_text": section("ℹ️", "راهنما", "برای مدیریت بکاپ‌ها از دکمه‌های منوی زیر استفاده کنید."),
+    "permission_invalid": section(
+        "⛔", "گزینه در دسترس نیست", "در این بخش اجازه استفاده از این گزینه را ندارید."
+    ),
+    "caption_backup_completed": "📦 <b>بکاپ کامل شد</b>",
+    "caption_profile": "📌 <b>پروفایل:</b> {value}",
+    "caption_status": "✅ <b>وضعیت:</b> کامل‌شده",
+    "caption_started": "⏱ <b>شروع:</b> {value}",
+    "caption_completed": "🏁 <b>پایان:</b> {value}",
+    "caption_schedule": "⏰ <b>زمان‌بندی:</b> {value}",
+    "caption_next_run": "⏭ <b>اجرای بعدی:</b> {value}",
+    "caption_timezone": "🌍 <b>منطقه زمانی:</b> {value}",
+    "caption_source": "🌐 <b>منبع:</b> {value}",
+    "caption_source_database_value": "پایگاه داده",
+    "caption_database_type": "🗄 <b>نوع پایگاه داده:</b> {value}",
+    "caption_engine": "⚙️ <b>موتور:</b> {value}",
+    "caption_server_name": "🏷 <b>نام سرور:</b> {value}",
+    "caption_server": "🖥 <b>سرور:</b> {value}",
+    "caption_database": "💾 <b>پایگاه داده:</b> {value}",
+    "caption_path": "📂 <b>مسیر (فایل / پوشه):</b> {value}",
+    "caption_skipped": "⚠️ <b>ردشده:</b> {value}",
+    "caption_skipped_symlink_one": "{count} پیوند نمادین ناامن",
+    "caption_skipped_symlink_many": "{count} پیوند نمادین ناامن",
+    "caption_skipped_special_one": "{count} فایل ویژه",
+    "caption_skipped_special_many": "{count} فایل ویژه",
+    "caption_skipped_unreadable_one": "{count} مورد خوانده‌نشده",
+    "caption_skipped_unreadable_many": "{count} مورد خوانده‌نشده",
+    "caption_run_id": "🆔 <b>شناسه اجرا:</b> {value}",
+    "caption_original_size": "📦 <b>اندازه اصلی بکاپ:</b> {value}",
+    "caption_final_size": "🗜 <b>اندازه نهایی بکاپ:</b> {value}",
+    "caption_part": "📄 <b>بخش {number} از {total}</b>",
     "settings_text": (
-        "اتصال: MTProto Bot\nSOCKS5: {proxy}\nحد آپلود: {limit:,} بایت\n"
-        "منطقه زمانی: {timezone}\nSQLite: فعال"
+        "⚙️ <b>تنظیمات اجرا</b>\nاتصال: MTProto Bot\nSOCKS5: {proxy}\n"
+        "حد آپلود: <code>{limit:,}</code> بایت\nمنطقه زمانی: <code>{timezone}</code>\n"
+        "پشتیبانی SQLite: فعال"
     ),
     "health_text": (
-        "سامانه: {status}\n{live} زنده  {ready} آماده\n"
+        "🩺 <b>وضعیت سامانه</b>\nسامانه: {status}\n{live} زنده  {ready} آماده\n"
         "{database} پایگاه کنترل  {schema} طرح {revision}\n"
         "{worker} ورکر  {scheduler} زمان‌بند  {telegram} تلگرام\n"
         "فضای آزاد: {disk:,} م‌ب | در انتظار: {pending:,} م‌ب\n"

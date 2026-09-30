@@ -68,8 +68,10 @@ To use same-host GitLab backup, the operator must add the GitLab backup director
 read/write bind mount on the `bot` (for immediate wizard validation) and `worker` (for acquisition)
 services, just like a local file/directory source. Configure the host-to-container pair in
 `LOCAL_SOURCE_MOUNTS`; the mount mapping itself is the approval. Then enter only the worker-visible
-target path in Telegram. The bot never asks for or creates the host-side bind source. For example,
-keep this deployment-specific mount out of the base Compose file and add it in an override:
+target path in Telegram. The bot never asks for or creates the host-side bind source. The base
+Compose file includes commented worker examples for both local file/directory and local GitLab
+mounts; uncomment and edit only the mappings needed by the deployment. Because the bot validates
+local GitLab paths during setup, expose the identical read/write mapping to `bot` in an override:
 
 ```yaml
 services:
@@ -82,7 +84,8 @@ services:
 ```
 
 ```dotenv
-LOCAL_SOURCE_MOUNTS=/etc:/host/etc,/opt/gitlab/data/backups:/host/gitlab-backups
+ALLOWED_SOURCE_ROOTS=/host/gitlab-backups
+LOCAL_SOURCE_MOUNTS=/opt/gitlab/data/backups:/host/gitlab-backups
 ```
 
 The Telegram value for that mapping is `/host/gitlab-backups`, never the host source path and
@@ -289,10 +292,8 @@ Local development can continue to use the default `sqlite+aiosqlite` URL. Produc
 `postgresql+asyncpg`; Docker Compose constructs that URL from `POSTGRES_DB`, `POSTGRES_USER`,
 and `POSTGRES_PASSWORD`. Set a long, randomly generated password in `.env` before startup.
 The password is not present in Compose or source-controlled configuration. `.env.example` is the
-configuration template: copy it to `.env`, then replace its empty credential placeholders. For a
-same-host production deployment, normally keep `WEBHOOK_HOST=127.0.0.1` and
-`WEBHOOK_PORT=8000`; both values are validated application settings, and ports outside 1-65535
-are rejected.
+configuration template: copy it to `.env`, then replace its empty credential placeholders. The
+bot uses Telethon's MTProto connection directly and does not expose or configure an HTTP webhook.
 
 Production Docker Compose runs a persistent PostgreSQL service, then a one-shot migration
 service followed by separate bot and worker services:
@@ -304,7 +305,7 @@ docker compose up -d
 docker compose ps
 ```
 
-PostgreSQL data lives in the private `postgres_data` named volume. Compose bind-mounts the
+PostgreSQL data lives in the private `postgres_data_v18` named volume. Compose bind-mounts the
 project's existing `.runtime` directory at `/data/runtime` only for work files, pending
 deliveries, and Telegram sessions. Application services wait for PostgreSQL health and the
 successful Alembic migration before starting. In production, both the bot and worker also execute
@@ -348,9 +349,9 @@ The image includes Debian's versioned PostgreSQL 15 client. Install additional
 versioned client packages in a derived image for other PostgreSQL server majors; the worker
 intentionally refuses a mismatched client.
 
-For local filesystem profiles, add explicit read-only bind mounts to the `worker` service and
-list their container paths in `ALLOWED_SOURCE_ROOTS`. To keep host-facing paths in profiles,
-declare each read-only bind as `host-path:container-path` in `LOCAL_SOURCE_MOUNTS`:
+For local filesystem profiles, uncomment and edit the documented read-only worker bind example,
+then list its worker-visible path in `ALLOWED_SOURCE_ROOTS`. Keep the same
+`host-path:worker-path` pair in `LOCAL_SOURCE_MOUNTS`; this mapping must match the Compose bind:
 
 ```yaml
 services:

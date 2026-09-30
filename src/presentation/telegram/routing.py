@@ -299,21 +299,27 @@ class RoutingMixin(WizardMixin):
             await self.transport.send_text(
                 user.telegram_user_id,
                 TelegramHtml(
-                    f"{t(language, 'my_backups_title')}\n\n━━━━━━━━━━━━━━\n"
-                    f"{names or t(language, 'none')}\n\n━━━━━━━━━━━━━━"
+                    f"{t(language, 'my_backups_title')}\n━━━━━━━━━━━━━━\n"
+                    f"{names or t(language, 'none')}\n━━━━━━━━━━━━━━"
                 ),
                 buttons=main_menu(user.role, language),
             )
         elif action == "audit":
             events = await AuditRepository(session).recent()
             timezone = (await SettingsService(session).get()).backup_timezone
+            timezone_heading = t(language, "timezone_heading")
             body = "\n".join(
-                f"• {escaped(event.event_type)}\n{format_user_datetime(event.created_at, timezone)}"
+                f"• {escaped(event.event_type)}\n"
+                f"{format_user_datetime(event.created_at, timezone, timezone_heading)}"
                 for event in events
             )
             await self.transport.send_text(
                 user.telegram_user_id,
-                TelegramHtml(body) if body else t(language, "audit_empty"),
+                (
+                    TelegramHtml(f"{t(language, 'audit_title')}\n━━━━━━━━━━━━━━\n{body}")
+                    if body
+                    else t(language, "audit_empty")
+                ),
             )
         elif action == "settings":
             await self._settings(session, user)

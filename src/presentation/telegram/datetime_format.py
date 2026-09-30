@@ -16,12 +16,14 @@ def timezone_label(value: datetime, timezone: str) -> str:
     return f"{timezone} (UTC{sign}{hours:02d}:{remainder:02d})"
 
 
-def format_user_datetime(value: datetime | None, timezone: str) -> TelegramHtml:
+def format_user_datetime(
+    value: datetime | None, timezone: str, timezone_heading: str = "Timezone"
+) -> TelegramHtml:
     if value is None:
         return TelegramHtml("—")
     return TelegramHtml(
         f"{format_user_timestamp(value, timezone)}\n"
-        f"Timezone: {escaped(timezone_label(value, timezone))}"
+        f"{escaped(timezone_heading)}: {escaped(timezone_label(value, timezone))}"
     )
 
 

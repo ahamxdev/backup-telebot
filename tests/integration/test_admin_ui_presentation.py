@@ -112,7 +112,7 @@ async def test_expired_inline_confirm_callback_reports_expiration(
 
         assert await dispatcher.fsm.get(actor.id) is None
     assert client.messages[-1] == (
-        "⚠️ This setup session expired. Please restart backup profile creation."
+        "⌛ <b>Setup Expired</b>\nThis session expired. Please restart backup profile creation."
     )
 
 
@@ -146,7 +146,7 @@ async def test_confirm_during_active_run_is_not_rejected_as_a_run_conflict(
         await dispatcher._flow(session, actor, "✅ Confirm", "confirm", item)
 
     assert "⚠️ Backup Is Running" not in client.messages[-1]
-    assert "Missing field: name" in client.messages[-1]
+    assert "Missing field: <code>name</code>" in client.messages[-1]
     conversation = await dispatcher.fsm.get(actor.id)
     assert conversation is not None
     assert conversation.state is State.ADD_BACKUP_CONFIRM
@@ -225,9 +225,9 @@ async def test_detail_cards_show_safe_configuration_with_icons(
         "<b>Output:</b> <code>backup.tar.zst</code>",
         "🔐 <b>Encryption:</b> Age Passphrase",
         "👥 <b>Access:</b> • <code>Operations</code>",
-        "👤 Admin Details",
-        "🆔 Telegram ID\n<code>2002</code>",
-        "📦 Allowed Backups\n• git backup",
+        "👤 <b>Admin Details</b>",
+        "🆔 <b>Telegram ID:</b> <code>2002</code>",
+        "📦 <b>Allowed Backups:</b> • git backup",
     ):
         assert expected in rendered
     for secret in secret_markers:

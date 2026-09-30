@@ -26,13 +26,22 @@ from database.models import (
     User,
     utc_now,
 )
-from domain.enums import DeliveryStatus, Role, RunStage, RunStatus, ScheduleKind, SourceLocation
+from domain.enums import (
+    DeliveryStatus,
+    LanguageCode,
+    Role,
+    RunStage,
+    RunStatus,
+    ScheduleKind,
+    SourceLocation,
+)
 from infrastructure.repositories import AccessRepository
 from pipeline.errors import PipelineError
 from pipeline.finalize import delivery_artifacts
 from pipeline.workspace import remove_owned_directory
 from presentation.telegram.datetime_format import format_user_timestamp, timezone_label
-from presentation.telegram.formatting import TelegramHtml, code, escaped, format_bytes_iec
+from presentation.telegram.formatting import TelegramHtml, code, format_bytes_iec
+from presentation.telegram.i18n import t
 
 log = structlog.get_logger()
 
@@ -50,42 +59,66 @@ class DeliveryErrorKind(StrEnum):
 _RANDOM = secrets.SystemRandom()
 
 
-def _schedule_caption(profile: BackupProfile) -> str:
+def _schedule_caption(profile: BackupProfile, language: LanguageCode | str) -> TelegramHtml:
     labels = {
-        ScheduleKind.MANUAL: "Manual only",
-        ScheduleKind.ONCE: "Once",
-        ScheduleKind.EVERY_N_MINUTES: f"Every {profile.schedule_interval} minutes",
-        ScheduleKind.EVERY_N_HOURS: f"Every {profile.schedule_interval} hours",
-        ScheduleKind.EVERY_N_DAYS: f"Every {profile.schedule_interval} days",
-        ScheduleKind.DAILY: f"Daily at {profile.schedule_time}",
-        ScheduleKind.WEEKLY: f"Weekly, day {profile.schedule_weekday} at {profile.schedule_time}",
-        ScheduleKind.MONTHLY: (
-            f"Monthly, day {profile.schedule_monthday} at {profile.schedule_time}"
+        ScheduleKind.MANUAL: t(language, "schedule_manual"),
+        ScheduleKind.ONCE: t(language, "schedule_once"),
+        ScheduleKind.EVERY_N_MINUTES: t(
+            language, "schedule_minutes_value", value=profile.schedule_interval
+        ),
+        ScheduleKind.EVERY_N_HOURS: t(
+            language, "schedule_hours_value", value=profile.schedule_interval
+        ),
+        ScheduleKind.EVERY_N_DAYS: t(
+            language, "schedule_days_value", value=profile.schedule_interval
+        ),
+        ScheduleKind.DAILY: t(language, "schedule_daily_value", value=profile.schedule_time),
+        ScheduleKind.WEEKLY: t(
+            language,
+            "schedule_weekly_value",
+            day=profile.schedule_weekday,
+            time=profile.schedule_time,
+        ),
+        ScheduleKind.MONTHLY: t(
+            language,
+            "schedule_monthly_value",
+            day=profile.schedule_monthday,
+            time=profile.schedule_time,
         ),
     }
     return labels[profile.schedule_kind]
 
 
 def build_backup_caption(
-    run: BackupRun, profile: BackupProfile, completed_at: datetime, timezone: str
+    run: BackupRun,
+    profile: BackupProfile,
+    completed_at: datetime,
+    timezone: str,
+    language: LanguageCode | str = LanguageCode.ENGLISH,
 ) -> TelegramHtml:
     try:
         metadata = json.loads(run.source_metadata or "{}")
     except (TypeError, ValueError):
         metadata = {}
-    schedule_lines = [f"⏰ <b>Schedule:</b> {escaped(_schedule_caption(profile))}"]
+    schedule_lines = [t(language, "caption_schedule", value=_schedule_caption(profile, language))]
     if profile.next_scheduled_at is not None:
         schedule_lines.append(
-            f"⏭ <b>Next run:</b> {format_user_timestamp(profile.next_scheduled_at, timezone)}"
+            t(
+                language,
+                "caption_next_run",
+                value=format_user_timestamp(profile.next_scheduled_at, timezone),
+            )
         )
-    schedule_lines.append(f"🌍 <b>Timezone:</b> {escaped(timezone_label(completed_at, timezone))}")
+    schedule_lines.append(
+        t(language, "caption_timezone", value=timezone_label(completed_at, timezone))
+    )
     sections = [
-        "📦 <b>Backup Completed</b>",
+        t(language, "caption_backup_completed"),
         "━━━━━━━━━━━━━━",
-        f"📌 <b>Profile:</b> {code(profile.name)}",
-        "✅ <b>Status:</b> Completed",
-        f"⏱ <b>Started:</b> {format_user_timestamp(run.started_at, timezone)}",
-        f"🏁 <b>Completed:</b> {format_user_timestamp(completed_at, timezone)}",
+        t(language, "caption_profile", value=code(profile.name)),
+        t(language, "caption_status"),
+        t(language, "caption_started", value=format_user_timestamp(run.started_at, timezone)),
+        t(language, "caption_completed", value=format_user_timestamp(completed_at, timezone)),
         "\n".join(schedule_lines),
         "━━━━━━━━━━━━━━",
     ]
@@ -103,33 +136,54 @@ def build_backup_caption(
             engine_version = f"{engine} {metadata['server_version']}"
         sections.extend(
             (
-                "🌐 <b>Source:</b> Database",
-                f"🗄 <b>Database Type:</b> {escaped(engine)}",
-                f"⚙️ <b>Engine:</b> {escaped(engine_version)}",
-                f"🖥 <b>Server:</b> {code(database_source.host)}",
-                f"💾 <b>Database:</b> {code(database_source.database_name)}",
+                t(
+                    language,
+                    "caption_source",
+                    value=t(language, "caption_source_database_value"),
+                ),
+                t(language, "caption_database_type", value=engine),
+                t(language, "caption_engine", value=engine_version),
+                t(language, "caption_server", value=code(database_source.host)),
+                t(language, "caption_database", value=code(database_source.database_name)),
             )
         )
     elif profile.files_source is not None:
         files_source = profile.files_source
         remote = files_source.location is SourceLocation.REMOTE_SERVER
-        sections.append(f"🌐 <b>Source:</b> {'Remote Server' if remote else 'Local Host'}")
+        sections.append(
+            t(
+                language,
+                "caption_source",
+                value=t(
+                    language,
+                    "source_location_remote" if remote else "source_location_local",
+                ),
+            )
+        )
         if remote and files_source.remote_server is not None:
-            sections.append(f"🏷 <b>Server name:</b> {code(files_source.remote_server.name)}")
-            sections.append(f"🖥 <b>Server:</b> {code(files_source.remote_server.host)}")
+            sections.append(
+                t(language, "caption_server_name", value=code(files_source.remote_server.name))
+            )
+            sections.append(
+                t(language, "caption_server", value=code(files_source.remote_server.host))
+            )
         for path in files_source.paths:
-            sections.append(f"📂 <b>Path (File / Directory):</b> {code(path.path)}")
+            sections.append(t(language, "caption_path", value=code(path.path)))
         skipped = [
-            (int(metadata.get("skipped_symlinks", 0)), "unsafe symlink"),
-            (int(metadata.get("skipped_special_files", 0)), "special file"),
-            (int(metadata.get("skipped_unreadable_entries", 0)), "unreadable entry"),
+            (int(metadata.get("skipped_symlinks", 0)), "caption_skipped_symlink"),
+            (int(metadata.get("skipped_special_files", 0)), "caption_skipped_special"),
+            (int(metadata.get("skipped_unreadable_entries", 0)), "caption_skipped_unreadable"),
         ]
         warning_parts = [
-            f"{count} {label}{'' if count == 1 else 's'}" for count, label in skipped if count
+            t(language, f"{key}_{'one' if count == 1 else 'many'}", count=count)
+            for count, key in skipped
+            if count
         ]
         if warning_parts:
-            sections.append(f"⚠️ <b>Skipped:</b> {escaped(', '.join(warning_parts))}")
-    sections.extend((f"🆔 <b>Run ID:</b> {code(run.id)}", "━━━━━━━━━━━━━━"))
+            sections.append(
+                t(language, "caption_skipped", value=TelegramHtml(", ".join(warning_parts)))
+            )
+    sections.extend((t(language, "caption_run_id", value=code(run.id)), "━━━━━━━━━━━━━━"))
     original_size = (
         format_bytes_iec(run.original_size_bytes)
         if run.original_size_bytes is not None
@@ -138,8 +192,8 @@ def build_backup_caption(
     final_size = (
         format_bytes_iec(run.final_size_bytes) if run.final_size_bytes is not None else "Unknown"
     )
-    sections.insert(-1, f"📦 <b>Original Backup Size:</b> {escaped(original_size)}")
-    sections.insert(-1, f"🗜 <b>Final Backup Size:</b> {escaped(final_size)}")
+    sections.insert(-1, t(language, "caption_original_size", value=original_size))
+    sections.insert(-1, t(language, "caption_final_size", value=final_size))
     return TelegramHtml("\n".join(sections))
 
 
@@ -447,11 +501,21 @@ class DeliveryService:
                     part=artifact.number,
                     total_parts=len(artifacts),
                 )
-                caption = build_backup_caption(run, profile, self.now(), self.timezone)
+                caption = build_backup_caption(
+                    run,
+                    profile,
+                    self.now(),
+                    self.timezone,
+                    authorized.language_code,
+                )
                 if multipart:
-                    caption = TelegramHtml(
-                        f"{caption}\n📄 <b>Part {artifact.number}/{len(artifacts)}</b>"
+                    part_label = t(
+                        authorized.language_code,
+                        "caption_part",
+                        number=artifact.number,
+                        total=len(artifacts),
                     )
+                    caption = TelegramHtml(f"{caption}\n{part_label}")
                 try:
                     async with asyncio.timeout(self.upload_timeout):
                         message = await self.transport.send_file(

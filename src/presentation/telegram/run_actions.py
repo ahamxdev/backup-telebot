@@ -95,12 +95,14 @@ class RunActionsMixin(BackupProfilesMixin):
                     profile=run.profile.name,
                     status=t(user.language_code, f"run_status_{run.status.value.lower()}"),
                     stage=t(user.language_code, f"run_stage_{run.stage.value.lower()}"),
-                    created=format_user_datetime(run.created_at, timezone),
+                    created=format_user_datetime(
+                        run.created_at, timezone, t(user.language_code, "timezone_heading")
+                    ),
                     size_summary=size_summary,
                 ),
                 buttons=await self._run_card_buttons(user, run),
             )
-        await self._send(user, "active_runs", buttons=backups_menu(user.language_code))
+        await self._send(user, "active_runs_footer", buttons=backups_menu(user.language_code))
 
     async def _show_run_history(self, session: AsyncSession, user: User, page_number: int) -> None:
         timezone = (await SettingsService(session).get()).backup_timezone
@@ -132,7 +134,9 @@ class RunActionsMixin(BackupProfilesMixin):
                     profile=run.profile.name,
                     status=t(user.language_code, f"run_status_{run.status.value.lower()}"),
                     stage=t(user.language_code, f"run_stage_{run.stage.value.lower()}"),
-                    created=format_user_datetime(run.created_at, timezone),
+                    created=format_user_datetime(
+                        run.created_at, timezone, t(user.language_code, "timezone_heading")
+                    ),
                     size_summary=size_summary,
                 ),
                 buttons=await self._run_card_buttons(user, run),

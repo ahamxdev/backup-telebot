@@ -37,23 +37,12 @@ def test_production_requires_credentials() -> None:
         Settings(APP_ENV="production")
 
 
-def test_webhook_bind_defaults_and_port_validation() -> None:
-    settings = Settings(APP_ENV="test")
-
-    assert settings.WEBHOOK_HOST == "127.0.0.1"
-    assert settings.WEBHOOK_PORT == 8000
-    for invalid_port in (0, 65536):
-        with pytest.raises(ValidationError):
-            Settings(APP_ENV="test", WEBHOOK_PORT=invalid_port)
-
-
 def test_env_example_is_a_valid_settings_template() -> None:
     template = Path(__file__).parents[2] / ".env.example"
 
     settings = Settings(_env_file=template)
 
-    assert settings.WEBHOOK_HOST == "127.0.0.1"
-    assert settings.WEBHOOK_PORT == 8000
+    assert settings.APP_ENV == "development"
 
 
 @pytest.mark.parametrize(
@@ -80,12 +69,6 @@ def test_invalid_multiple_superadmin_ids_are_rejected(raw: str) -> None:
         Settings(APP_ENV="test", SUPERADMIN_TELEGRAM_IDS=raw)
 
 
-def test_legacy_single_superadmin_id_remains_supported() -> None:
-    settings = Settings(APP_ENV="test", TELEGRAM_SUPERADMIN_ID=123456789)
-
-    assert settings.superadmin_telegram_ids() == (123456789,)
-
-
 def test_production_requires_postgresql_control_database() -> None:
     values = {
         "APP_ENV": "production",
@@ -93,7 +76,7 @@ def test_production_requires_postgresql_control_database() -> None:
         "TELEGRAM_API_ID": 123,
         "TELEGRAM_API_HASH": "hash",
         "TELEGRAM_BOT_TOKEN": "123:token",
-        "TELEGRAM_SUPERADMIN_ID": 1,
+        "SUPERADMIN_TELEGRAM_IDS": "1",
     }
     with pytest.raises(ValidationError, match="postgresql\\+asyncpg"):
         Settings(**values, DATABASE_URL="sqlite+aiosqlite:///production.sqlite3")

@@ -30,7 +30,7 @@ def version() -> None:
 async def _bootstrap(settings: Settings) -> list[tuple[int, bool]]:
     superadmin_ids = settings.superadmin_telegram_ids()
     if not superadmin_ids:
-        raise ValueError("SUPERADMIN_TELEGRAM_IDS or TELEGRAM_SUPERADMIN_ID is required")
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS is required")
     database = Database(settings.DATABASE_URL)
     try:
         async with database.session_factory() as session:

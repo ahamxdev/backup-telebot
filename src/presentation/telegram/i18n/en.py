@@ -1,3 +1,5 @@
+from presentation.telegram.i18n.message import section
+
 STRINGS: dict[str, str] = {
     "backups": "💾 Backups",
     "admins": "👥 Admins",
@@ -27,6 +29,9 @@ STRINGS: dict[str, str] = {
     "delete_backup": "🗑 Delete Backup",
     "refresh_backups": "📋 Refresh Backups",
     "active_runs": "⚙️ Active Runs",
+    "active_runs_footer": section(
+        "🧭", "Active Backups", "Use the controls above or return to the backups menu."
+    ),
     "run_history": "📜 Run History",
     "run_details": "🔎 Details",
     "cancel_run": "⛔ Cancel Run",
@@ -49,65 +54,83 @@ STRINGS: dict[str, str] = {
     "confirm": "✅ Confirm",
     "previous_page": "◀️ Previous",
     "next_page": "Next ▶️",
-    "welcome": "Welcome.",
-    "cancelled": "Operation cancelled.",
-    "returned": "Returned home.",
-    "choose_menu": "Please choose an option from the menu.",
-    "invalid": "Invalid input; try again.",
-    "too_many_invalid": "Too many invalid inputs; operation cancelled.",
-    "expired": "The operation expired.",
-    "no_choices": "Nothing is available to select.",
-    "language_prompt": "Choose your language:",
-    "language_saved": "Language updated.",
-    "admins_title": "Admin management",
-    "no_admins": "No admins found.",
+    "welcome": section(
+        "👋", "Welcome", "Manage your backups, runs, servers, and access from the menu below."
+    ),
+    "cancelled": section("❎", "Operation Cancelled", "No changes were saved."),
+    "returned": section("🏠", "Home", "Choose an option from the menu below."),
+    "choose_menu": section("🧭", "Main Menu", "Choose an option below."),
+    "invalid": section("⚠️", "Invalid Input", "Please check the value and try again."),
+    "too_many_invalid": section(
+        "⛔", "Operation Cancelled", "Too many invalid attempts were received. Please start again."
+    ),
+    "expired": section("⌛", "Session Expired", "Please start the operation again."),
+    "no_choices": section("ℹ️", "Nothing to Select", "No eligible items are currently available."),
+    "language_prompt": section("🌐", "Language", "Choose your preferred language."),
+    "language_saved": section("✅", "Language Updated", "Your preference has been saved."),
+    "admins_title": section("👥", "Admin Access", "Manage administrators and their backup access."),
+    "no_admins": section("👥", "No Admins", "No administrator accounts have been created yet."),
     "admin_card": (
-        "👤 Admin Details\n\n━━━━━━━━━━━━━━\n📌 Name\n<code>{name}</code>\n\n"
-        "🆔 Telegram ID\n<code>{telegram_id}</code>\n\n✅ Status\n{status}\n\n"
-        "🌐 Language\n{admin_language}\n\n━━━━━━━━━━━━━━\n📦 Allowed Backups\n{backups}\n\n"
-        "━━━━━━━━━━━━━━"
+        "👤 <b>Admin Details</b>\n━━━━━━━━━━━━━━\n📌 <b>Name:</b> <code>{name}</code>\n"
+        "🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n✅ <b>Status:</b> {status}\n"
+        "🌐 <b>Language:</b> {admin_language}\n━━━━━━━━━━━━━━\n"
+        "📦 <b>Allowed Backups:</b> {backups}\n━━━━━━━━━━━━━━"
     ),
     "enabled": "Enabled",
     "disabled": "Disabled",
     "none": "None",
     "language_en": "English",
     "language_fa": "Persian",
-    "ask_admin_name": "Enter display name:",
-    "ask_telegram_id": "Enter the numeric Telegram ID:",
-    "ask_admin_language": "Choose the admin's preferred language:",
+    "ask_admin_name": section("👤", "Admin Name", "Enter a display name."),
+    "ask_telegram_id": section("🆔", "Telegram ID", "Enter the numeric Telegram user ID."),
+    "ask_admin_language": section("🌐", "Admin Language", "Choose the preferred language."),
     "admin_confirmation": (
-        "Name: {name}\nTelegram ID: {telegram_id}\nLanguage: {admin_language}\n\nCreate this admin?"
+        "👤 <b>Confirm Admin</b>\nName: <code>{name}</code>\nTelegram ID: "
+        "<code>{telegram_id}</code>\nLanguage: {admin_language}\nCreate this admin?"
     ),
-    "admin_created_access": "Admin created. Assign backup access:",
-    "admin_saved": "Admin and access saved.",
-    "select_admin_edit": "Select an admin to edit:",
-    "select_admin_delete": "Select an admin to delete:",
-    "edit_admin_prompt": "Choose what to edit:",
-    "ask_new_name": "Enter the new name:",
-    "ask_new_telegram_id": "Enter the new Telegram ID:",
-    "admin_updated": "Admin updated.",
-    "admin_status_changed": "Admin status changed.",
+    "admin_created_access": section("✅", "Admin Created", "Now assign backup access."),
+    "admin_saved": section("✅", "Admin Saved", "The account and backup access are up to date."),
+    "select_admin_edit": section("✏️", "Edit Admin", "Choose an administrator."),
+    "select_admin_delete": section("🗑", "Delete Admin", "Choose an administrator."),
+    "edit_admin_prompt": section("✏️", "Edit Admin", "Choose the field to update."),
+    "ask_new_name": section("👤", "New Name", "Enter the administrator's new display name."),
+    "ask_new_telegram_id": section("🆔", "New Telegram ID", "Enter the new numeric user ID."),
+    "admin_updated": section("✅", "Admin Updated", "The administrator details were saved."),
+    "admin_status_changed": section(
+        "✅", "Status Updated", "The administrator status was changed."
+    ),
     "admin_delete_summary": (
-        "Delete and disable this admin?\n\nAdmin: {name}\nTelegram ID: {telegram_id}\n"
-        "Status: {status}\nLanguage: {admin_language}"
+        "⚠️ <b>Delete Admin?</b>\nAdmin: <code>{name}</code>\nTelegram ID: "
+        "<code>{telegram_id}</code>\nStatus: {status}\nLanguage: {admin_language}\n"
+        "Access will be revoked and the account disabled."
     ),
-    "admin_deleted": "Admin deleted, disabled, and access revoked.",
-    "select_backup_access": "Select allowed backups:",
-    "access_saved": "Access updated.",
-    "no_active_operations": "No backup operations are currently running.",
-    "active_runs_overview": "{count} backup run(s) are currently active.",
-    "active_runs_title": "Active backup runs: {count}",
-    "no_run_history": "No backup run history is available.",
-    "run_history_header": "Run history — page {page}/{pages} ({total} total)",
-    "run_history_footer": "Run history navigation",
+    "admin_deleted": section("✅", "Admin Deleted", "The account was disabled and access revoked."),
+    "select_backup_access": section(
+        "📦", "Backup Access", "Select the backups this admin may use."
+    ),
+    "access_saved": section("✅", "Access Updated", "The access assignments were saved."),
+    "no_active_operations": section(
+        "✅", "No Active Backups", "There are currently no backup operations running."
+    ),
+    "active_runs_overview": section(
+        "⚙️", "Active Backups", "{count} backup run(s) are in progress."
+    ),
+    "active_runs_title": section(
+        "⚙️", "Active Backup Runs", "Currently active: <code>{count}</code>"
+    ),
+    "no_run_history": section("📜", "No Run History", "No backup runs have been recorded yet."),
+    "run_history_header": section(
+        "📜", "Run History", "Page {page} of {pages} · <code>{total}</code> total"
+    ),
+    "run_history_footer": section("🧭", "Run History", "Use the buttons below to navigate."),
     "size_unknown": "Unknown",
     "run_size_summary": (
         "📦 Original Backup Size: {original_size}\n🗜 Final Backup Size: {final_size}"
     ),
     "run_list_card": (
-        "🔎 Run #<code>{run_id}</code> · <code>{profile}</code>\n\n━━━━━━━━━━━━━━\n"
-        "✅ Status\n{status}\n\n⚙️ Stage\n{stage}\n\n🕒 Created\n{created}"
-        "{size_summary}\n\n━━━━━━━━━━━━━━"
+        "🔎 <b>Run #<code>{run_id}</code></b> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
+        "✅ <b>Status:</b> {status}\n⚙️ <b>Stage:</b> {stage}\n🕒 <b>Created:</b> {created}"
+        "{size_summary}\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>Backup Run Details</b>\n━━━━━━━━━━━━━━\n🆔 <b>Run ID:</b> <code>{run_id}</code>\n"
@@ -125,19 +148,25 @@ STRINGS: dict[str, str] = {
         "Pending: <code>{pending}</code> · Succeeded: <code>{succeeded}</code>\n"
         "Failed: <code>{failed}</code> · Skipped: <code>{skipped}</code>\n━━━━━━━━━━━━━━"
     ),
-    "run_cancel_requested": "Cancellation requested for run <code>#{run_id}</code>.",
-    "run_delivery_retry_requested": (
-        "Failed deliveries for run <code>#{run_id}</code> were queued safely."
+    "run_cancel_requested": section(
+        "⛔", "Cancellation Requested", "Run <code>#{run_id}</code> will stop safely."
     ),
-    "run_retry_queued": "A new retry run was queued as run <code>#{run_id}</code>.",
+    "run_delivery_retry_requested": (
+        "🔁 <b>Delivery Retry Queued</b>\nFailed deliveries for run "
+        "<code>#{run_id}</code> will be retried."
+    ),
+    "run_retry_queued": section("✅", "Retry Queued", "New run: <code>#{run_id}</code>"),
     "run_artifact_purge_complete": (
-        "The verified retained artifact for run <code>#{run_id}</code> was purged."
+        "✅ <b>Artifact Purged</b>\nThe retained artifact for run "
+        "<code>#{run_id}</code> was removed."
     ),
     "run_artifact_purge_confirm": (
-        "Permanently purge the verified retained artifact for run <code>#{run_id}</code>? "
-        "Database history will be kept."
+        "⚠️ <b>Purge Retained Artifact?</b>\nPermanently remove the verified artifact for run "
+        "<code>#{run_id}</code>? Database history will be kept."
     ),
-    "run_action_unavailable": "That run action is no longer available or is unsafe.",
+    "run_action_unavailable": section(
+        "⚠️", "Action Unavailable", "This run action is no longer available or safe to perform."
+    ),
     "run_artifact_retained": "Retained ({size:,} bytes)",
     "run_artifact_purged": "Purged; database history retained",
     "run_artifact_delivered": "Delivery completed ({size:,} bytes)",
@@ -171,7 +200,8 @@ STRINGS: dict[str, str] = {
     "run_stage_telegram_delivery": "Telegram delivery",
     "run_stage_cleanup": "Cleanup",
     "run_stage_complete": "Complete",
-    "no_backups": "No backups found.",
+    "no_backups": section("📦", "No Backup Profiles", "No backup profiles have been created yet."),
+    "backups_title": section("📦", "Backup Profiles", "Manage profiles, runs, and access."),
     "backup_card": (
         "📦 <b>Backup Profile</b>\n━━━━━━━━━━━━━━\n📌 <b>Name:</b> <code>{name}</code>\n"
         "📁 <b>Source:</b> {source}\n🖥 <b>Remote Server:</b> <code>{server}</code>\n"
@@ -188,13 +218,15 @@ STRINGS: dict[str, str] = {
         "📝 <b>Description</b>\nEnter a new description, send <code>-</code> to keep it, "
         "or <code>!</code> to clear it."
     ),
-    "ask_edit_database_" + "password": (
-        "Enter a replacement database password, or send “-” to preserve the current password:"
+    "ask_edit_database_" + "password": section(
+        "🔐", "Database Password", "Enter a replacement, or send <code>-</code> to keep it."
     ),
-    "ask_edit_age_" + "passphrase": (
-        "Enter a replacement Age passphrase, or send “-” to preserve the current passphrase:"
+    "ask_edit_age_" + "passphrase": section(
+        "🔐", "Age Passphrase", "Enter a replacement, or send <code>-</code> to keep it."
     ),
-    "edit_keep_hint": "During this edit, send “-” to preserve an existing non-secret value.",
+    "edit_keep_hint": section(
+        "ℹ️", "Editing", "Send <code>-</code> to keep an existing non-secret value."
+    ),
     "ask_description": (
         "📝 <b>Description</b>\nEnter a description, or send <code>-</code> to leave it empty."
     ),
@@ -259,27 +291,39 @@ STRINGS: dict[str, str] = {
     "encryption_none": "No Encryption",
     "encryption_age_public": "Age Public-Key — recommended",
     "encryption_age_" + "passphrase": "Age Passphrase",
-    "ask_server_name": "Enter a unique server name:",
-    "ask_server_host": "Enter the host name or IP address:",
-    "ask_server_port": "Enter the SSH port:",
-    "ask_server_username": "Enter the SSH username:",
+    "ask_server_name": section("🖥", "Server Name", "Enter a unique name for this server."),
+    "ask_server_host": section("🌐", "Server Address", "Enter the hostname or IP address."),
+    "ask_server_port": section("🔌", "SSH Port", "Enter the SSH port number."),
+    "ask_server_username": section("👤", "SSH Username", "Enter the SSH account name."),
     "ask_server_private_key": (
-        "Send the SSH private key. It will be encrypted and never displayed again:"
+        "🔐 <b>SSH Private Key</b>\nSend the private key. It will be encrypted and never displayed."
     ),
-    "ask_server_" + "passphrase": "Enter the private-key passphrase, or send “-”:",
-    "ask_server_name_edit": "Enter the replacement server name:",
+    "ask_server_" + "passphrase": section(
+        "🔑", "Key Passphrase", "Enter the passphrase, or send <code>-</code> if there is none."
+    ),
+    "ask_server_name_edit": section("🖥", "Server Name", "Enter the replacement name."),
     "server_fingerprint_confirm": (
-        "Connection succeeded. Trust this exact SSH host-key fingerprint?\n\n{fingerprint}"
+        "🛡 <b>Trust SSH Host Key?</b>\nConnection succeeded. Verify and trust this fingerprint:\n"
+        "<code>{fingerprint}</code>"
     ),
-    "server_saved": "Remote server saved with pinned host-key verification.",
-    "server_updated": "Remote server updated after trusting its new host-key fingerprint.",
-    "edit_server_prompt": "Choose how to edit this remote server:",
+    "server_saved": section("✅", "Server Saved", "SSH host-key verification is pinned."),
+    "server_updated": section(
+        "✅", "Server Updated", "The new SSH host key is trusted and pinned."
+    ),
+    "edit_server_prompt": section("✏️", "Edit Remote Server", "Choose what to update."),
     "reconfigure_server": "🔐 Replace Connection Details",
-    "server_status_changed": "Remote server status changed.",
-    "server_deleted": "Remote server deleted.",
-    "server_test_ok": "Connection succeeded and the host key matches.",
-    "servers_title": "Remote server management",
-    "no_servers": "No remote servers found.",
+    "server_status_changed": section(
+        "✅", "Status Updated", "The remote server status was changed."
+    ),
+    "server_deleted": section("✅", "Server Deleted", "The remote server was removed."),
+    "server_delete_prompt": section(
+        "⚠️", "Delete Remote Server?", "Review the server below, then confirm permanent deletion."
+    ),
+    "server_test_ok": section(
+        "✅", "Connection Verified", "SSH connected and the host key matches."
+    ),
+    "servers_title": section("🖥", "Remote Servers", "Manage trusted backup source servers."),
+    "no_servers": section("🖥", "No Remote Servers", "No remote servers have been added yet."),
     "server_card": (
         "🖥 <b>Remote Server Details</b>\n━━━━━━━━━━━━━━\n"
         "📌 <b>Server Name:</b> <code>{name}</code>\n"
@@ -289,19 +333,31 @@ STRINGS: dict[str, str] = {
         "✅ <b>Status:</b> {status}\n━━━━━━━━━━━━━━"
     ),
     "ssh_private_key": "SSH private key",
-    "choose_database_engine": "Choose one database engine:",
-    "choose_tls": "Choose the database TLS/SSL mode:",
-    "ask_tls_ca": "Send the trusted CA certificate in PEM format:",
-    "ask_database_host": "Enter the database host:",
-    "ask_database_port": "Enter the database port:",
-    "ask_database_name": "Enter exactly one database name:",
-    "ask_database_username": "Enter the database username:",
-    "ask_database_" + "password": "Enter the database password. It will never be displayed again:",
-    "ask_mssql_docker": "Is SQL Server running inside Docker?",
-    "ask_mssql_backup_path": "Enter the SQL Server/container backup destination path:",
-    "ask_mssql_host_path": "Enter the corresponding remote-host mounted path:",
-    "choose_location": "Choose the file/directory source location:",
-    "ask_paths": "Enter one or more absolute file / directory paths, one per line:",
+    "choose_database_engine": section("🗄", "Database Engine", "Choose one database type."),
+    "choose_tls": section("🛡", "Database TLS", "Choose the TLS/SSL verification mode."),
+    "ask_tls_ca": section("📜", "Trusted CA", "Send the CA certificate in PEM format."),
+    "ask_database_host": section("🌐", "Database Host", "Enter the hostname or IP address."),
+    "ask_database_port": section("🔌", "Database Port", "Enter the port number."),
+    "ask_database_name": section("🗄", "Database Name", "Enter exactly one database name."),
+    "ask_database_username": section("👤", "Database Username", "Enter the backup account name."),
+    "ask_database_" + "password": section(
+        "🔐", "Database Password", "Enter the password. It will never be displayed."
+    ),
+    "ask_mssql_docker": section("🐳", "SQL Server Runtime", "Is SQL Server running in Docker?"),
+    "ask_mssql_backup_path": section(
+        "📂",
+        "SQL Server Backup Path",
+        "Enter the destination path inside SQL Server or its container.",
+    ),
+    "ask_mssql_host_path": section(
+        "📂", "Remote Host Path", "Enter the corresponding mounted path on the remote host."
+    ),
+    "choose_location": section(
+        "📍", "Source Location", "Choose where the files or directories live."
+    ),
+    "ask_paths": section(
+        "📂", "Files & Directories", "Enter one or more absolute paths, one per line."
+    ),
     "choose_gitlab_location": "📍 <b>GitLab Location</b>\nWhere is this GitLab instance running?",
     "ask_gitlab_container": "🐳 <b>GitLab Container</b>\nEnter the Docker container name.",
     "ask_gitlab_worker_path": (
@@ -314,18 +370,34 @@ STRINGS: dict[str, str] = {
         "Available worker-visible root(s):\n{available_roots}"
     ),
     "gitlab_worker_path_invalid_path": (
-        "The path must be absolute and must not contain traversal such as <code>..</code>."
+        "⚠️ <b>Invalid Backup Path</b>\nUse an absolute path without traversal "
+        "such as <code>..</code>."
     ),
-    "gitlab_worker_path_container_escape": "The path is outside the approved worker-visible roots.",
-    "gitlab_worker_path_denied_root": "The path is inside a protected filesystem area.",
-    "gitlab_worker_path_not_found": "The directory does not exist inside the backup worker.",
-    "gitlab_worker_path_not_directory": "The path is not a directory inside the backup worker.",
-    "gitlab_worker_path_not_writable": "The directory is not writable inside the backup worker.",
-    "gitlab_worker_path_symlink_escape": "The path is unsafe or uses a symbolic link.",
+    "gitlab_worker_path_container_escape": section(
+        "⚠️", "Path Not Approved", "The path is outside the approved worker-visible roots."
+    ),
+    "gitlab_worker_path_denied_root": section(
+        "⛔", "Protected Path", "The path is inside a protected filesystem area."
+    ),
+    "gitlab_worker_path_not_found": section(
+        "⚠️", "Directory Not Found", "The directory is not visible inside the backup worker."
+    ),
+    "gitlab_worker_path_not_directory": section(
+        "⚠️", "Directory Required", "The worker-visible path is not a directory."
+    ),
+    "gitlab_worker_path_not_writable": section(
+        "⚠️", "Write Access Required", "The directory is not writable inside the backup worker."
+    ),
+    "gitlab_worker_path_symlink_escape": section(
+        "⛔", "Unsafe Path", "Symbolic links and path escapes are not allowed."
+    ),
     "gitlab_worker_path_invalid_configuration": (
-        "The approved local mount configuration is invalid. Contact the operator."
+        "⚠️ <b>Mount Configuration Error</b>\nThe approved local mount mapping is invalid. "
+        "Contact the operator."
     ),
-    "gitlab_worker_path_root_not_allowed": "The filesystem root cannot be approved.",
+    "gitlab_worker_path_root_not_allowed": section(
+        "⛔", "Root Path Rejected", "The filesystem root cannot be approved as a source."
+    ),
     "ask_gitlab_remote_path": (
         "📂 <b>GitLab Backup Directory</b>\nEnter the directory on the remote server "
         "(for example, <code>/opt/gitlab/data/backups</code>)."
@@ -336,24 +408,35 @@ STRINGS: dict[str, str] = {
         "Add a remote server first, or choose Local Host."
     ),
     "gitlab_exclusive_warning": (
-        "⚠️ GitLab backup directory is managed exclusively by this profile. Existing backup "
-        "files in this directory will be removed before each new backup.\n\n"
+        "⚠️ <b>Exclusive Backup Directory</b>\nThis GitLab backup directory is managed "
+        "exclusively by this profile. Existing files are removed before each new backup.\n"
         "GitLab application backups do not include all configuration/secrets. Back up "
-        "gitlab.rb and gitlab-secrets.json separately for complete disaster recovery."
+        "<code>gitlab.rb</code> and <code>gitlab-secrets.json</code> separately "
+        "for complete recovery."
     ),
     "gitlab_source_details": (
         "\n🦊 <b>GitLab source</b>\n📍 <b>Location:</b> {location}"
         "\n<b>Container:</b> {container}\n<b>Backup Path:</b> {backup_path}"
     ),
-    "choose_schedule": "Choose a schedule. Times use Backup Timezone: {timezone}",
-    "ask_schedule_interval": "Enter N as a positive whole number:",
-    "ask_schedule_daily": "Enter time as HH:MM:",
-    "ask_schedule_weekly": "Enter weekday (0=Monday..6=Sunday) and time as: 0 HH:MM",
-    "ask_schedule_monthly": "Enter day (1..28) and time as: 1 HH:MM",
+    "choose_schedule": section(
+        "⏰", "Backup Schedule", "Choose a schedule. Times use <code>{timezone}</code>."
+    ),
+    "ask_schedule_interval": section("🔁", "Schedule Interval", "Enter a positive whole number."),
+    "ask_schedule_daily": section("🕒", "Daily Time", "Enter the time as <code>HH:MM</code>."),
+    "ask_schedule_weekly": section(
+        "📅",
+        "Weekly Schedule",
+        "Enter weekday and time as <code>0 HH:MM</code> (0=Monday, 6=Sunday).",
+    ),
+    "ask_schedule_monthly": section(
+        "📅", "Monthly Schedule", "Enter day and time as <code>1 HH:MM</code> (day 1–28)."
+    ),
     "choose_remote_server": "🌐 <b>Remote Server</b>\nChoose the server hosting this source.",
-    "choose_assigned_admins": "Choose assigned admins, then Save Access:",
+    "choose_assigned_admins": section(
+        "👥", "Admin Access", "Select administrators, then choose Save Access."
+    ),
     "archive_explanation": (
-        "📦 Archive Format\n\nAn archive groups files into one package. It does not "
+        "📦 <b>Archive Format</b>\nAn archive groups files into one package. It does not "
         "necessarily reduce their size; compression is selected separately.\n\n"
         "━━━━━━━━━━━━━━\n🗃 TAR (Recommended)\n• Extension: .tar\n"
         "• Container only; preserves Unix metadata\n"
@@ -367,7 +450,7 @@ STRINGS: dict[str, str] = {
         "• Use for: tooling-rich environments"
     ),
     "compression_explanation": (
-        "🗜 Compression\n\nCompression reduces the archive size. Higher ratios usually cost "
+        "🗜 <b>Compression</b>\nCompression reduces the archive size. Higher ratios usually cost "
         "more CPU and time. The algorithm is independent of the archive container.\n\n"
         "━━━━━━━━━━━━━━\n◻️ None · no extension · ratio none · fastest · CPU minimal\n"
         "🚀 Zstandard (Recommended) · .zst · ratio high · fast · CPU medium\n"
@@ -381,12 +464,14 @@ STRINGS: dict[str, str] = {
         "your backup configuration has not been changed."
     ),
     "choose_compression_preset": (
-        "🗜 Compression Preset\n\nChoose the speed and size balance. Balanced is recommended."
+        "🗜 <b>Compression Preset</b>\nChoose the speed and size balance. Balanced is recommended."
     ),
-    "choose_encryption": "Choose encryption:",
-    "ask_age_recipients": "Enter Age recipient public keys, one per line:",
+    "choose_encryption": section("🔐", "Encryption", "Choose how the final backup is protected."),
+    "ask_age_recipients": section(
+        "🔑", "Age Recipients", "Enter public recipient keys, one per line."
+    ),
     "ask_age_" + "passphrase": (
-        "Enter the Age passphrase. It will be encrypted and never displayed again:"
+        "🔐 <b>Age Passphrase</b>\nEnter the passphrase. It will be encrypted and never displayed."
     ),
     "profile_confirmation": (
         "📋 <b>Confirm Backup Profile</b>\n━━━━━━━━━━━━━━\n"
@@ -417,54 +502,108 @@ STRINGS: dict[str, str] = {
     "source_location_local": "Local Host",
     "source_location_remote": "Remote Server",
     "backup_timezone": "🕓 Backup Timezone",
-    "ask_backup_timezone": "Enter an IANA backup timezone (for example, Asia/Tehran):",
+    "timezone_heading": "Timezone",
+    "ask_backup_timezone": section(
+        "🕓", "Backup Timezone", "Enter an IANA timezone, for example <code>Asia/Tehran</code>."
+    ),
     "status_draft": "Draft",
     "status_archived": "Archived",
-    "backup_created": "Draft “{name}” saved.",
-    "backup_setup_expired": (
-        "⚠️ This setup session expired. Please restart backup profile creation."
+    "backup_created": section(
+        "✅", "Backup Profile Saved", "Draft <code>{name}</code> was created."
     ),
-    "backup_confirm_missing": "⚠️ Missing field: {field}. Return to that step and complete it.",
+    "backup_setup_expired": (
+        "⌛ <b>Setup Expired</b>\nThis session expired. Please restart backup profile creation."
+    ),
+    "backup_confirm_missing": (
+        "⚠️ <b>Incomplete Profile</b>\nMissing field: <code>{field}</code>. "
+        "Return to that step and complete it."
+    ),
     "backup_confirm_invalid_state": (
-        "⚠️ This confirmation does not match the current setup step. Review the profile again."
+        "⚠️ <b>Confirmation Mismatch</b>\nThis confirmation does not match the current setup step. "
+        "Review the profile again."
     ),
     "backup_confirm_stale": (
-        "⚠️ This confirmation button is outdated. Use the newest confirmation message."
+        "⚠️ <b>Outdated Confirmation</b>\nUse the button on the newest confirmation message."
     ),
     "backup_confirm_unavailable": (
-        "⚠️ Profile saving is temporarily unavailable because secure storage is not configured."
+        "⚠️ <b>Saving Unavailable</b>\nSecure storage is not configured. Contact the operator."
     ),
-    "backup_confirm_validation_failed": "⚠️ Profile validation failed: {reason}",
+    "backup_confirm_validation_failed": (
+        "⚠️ <b>Validation Failed</b>\nPlease review the profile: {reason}"
+    ),
     "backup_confirm_save_failed": (
-        "⚠️ The profile could not be saved because of an internal error. "
-        "Your setup was not accepted."
+        "⚠️ <b>Profile Not Saved</b>\nAn internal error occurred. No setup changes were accepted."
     ),
-    "select_backup_edit": "Select a backup to edit:",
-    "select_backup_delete": "Select a backup to delete:",
-    "edit_backup_prompt": "Choose what to edit:",
-    "backup_updated": "Backup updated.",
-    "backup_configuration_updated": "Backup “{name}” configuration updated atomically.",
-    "current_value": "Current value:",
-    "existing_credential": ("Existing secret is set — enter a new value or keep the existing one."),
-    "backup_status_changed": "Backup status changed.",
-    "backup_run_queued": "Backup queued. Run <code>#{run_id}</code>.",
-    "backup_run_active": "A run is already active: {stage}, started {started}.",
-    "backup_backpressure": "New backups are paused: delivery storage is at its safety limit.",
+    "select_backup_edit": section("✏️", "Edit Backup", "Choose a backup profile."),
+    "select_backup_delete": section("🗑", "Delete Backup", "Choose a backup profile."),
+    "edit_backup_prompt": section("✏️", "Edit Backup", "Choose the field to update."),
+    "backup_updated": section("✅", "Backup Updated", "The profile changes were saved."),
+    "backup_configuration_updated": section(
+        "✅", "Configuration Updated", "Backup <code>{name}</code> was updated atomically."
+    ),
+    "current_value": "<b>Current value:</b>",
+    "existing_credential": (
+        "🔐 <b>Credential Stored</b>\nEnter a new value or keep the existing secret."
+    ),
+    "backup_status_changed": section(
+        "✅", "Status Updated", "The backup profile status was changed."
+    ),
+    "backup_run_queued": section(
+        "✅", "Backup Queued", "Run <code>#{run_id}</code> is ready to start."
+    ),
+    "backup_run_active": section(
+        "⚙️", "Backup Already Running", "Stage: {stage}\nStarted: {started}"
+    ),
+    "backup_backpressure": section(
+        "⚠️", "Backups Paused", "Delivery storage has reached its configured safety limit."
+    ),
     "backup_delete_summary": (
-        "Archive this backup?\n\nName: {name}\nSource type: {source}\nStatus: {status}"
+        "⚠️ <b>Archive Backup?</b>\nName: <code>{name}</code>\nSource: {source}\n"
+        "Status: {status}\nAssigned access will be revoked."
     ),
-    "backup_deleted": "Backup archived and access revoked.",
-    "select_admin_access": "Select allowed admins:",
-    "my_backups_title": "Your assigned backups:",
-    "audit_empty": "No audit events found.",
-    "help_text": "Use the menu buttons to work with the bot.",
-    "permission_invalid": "That option is not available.",
+    "backup_deleted": section("✅", "Backup Archived", "Assigned access has been revoked."),
+    "select_admin_access": section(
+        "👥", "Admin Access", "Select administrators allowed to use this backup."
+    ),
+    "my_backups_title": section("📦", "My Backups", "Choose one of your assigned backup profiles."),
+    "audit_empty": section("🧾", "No Audit Events", "No activity has been recorded yet."),
+    "audit_title": section("🧾", "Audit Log", "Recent system activity"),
+    "help_text": section("ℹ️", "Help", "Use the menu buttons below to manage your backups."),
+    "permission_invalid": section("⛔", "Option Unavailable", "You cannot use this option here."),
+    "caption_backup_completed": "📦 <b>Backup Completed</b>",
+    "caption_profile": "📌 <b>Profile:</b> {value}",
+    "caption_status": "✅ <b>Status:</b> Completed",
+    "caption_started": "⏱ <b>Started:</b> {value}",
+    "caption_completed": "🏁 <b>Completed:</b> {value}",
+    "caption_schedule": "⏰ <b>Schedule:</b> {value}",
+    "caption_next_run": "⏭ <b>Next run:</b> {value}",
+    "caption_timezone": "🌍 <b>Timezone:</b> {value}",
+    "caption_source": "🌐 <b>Source:</b> {value}",
+    "caption_source_database_value": "Database",
+    "caption_database_type": "🗄 <b>Database Type:</b> {value}",
+    "caption_engine": "⚙️ <b>Engine:</b> {value}",
+    "caption_server_name": "🏷 <b>Server name:</b> {value}",
+    "caption_server": "🖥 <b>Server:</b> {value}",
+    "caption_database": "💾 <b>Database:</b> {value}",
+    "caption_path": "📂 <b>Path (File / Directory):</b> {value}",
+    "caption_skipped": "⚠️ <b>Skipped:</b> {value}",
+    "caption_skipped_symlink_one": "{count} unsafe symlink",
+    "caption_skipped_symlink_many": "{count} unsafe symlinks",
+    "caption_skipped_special_one": "{count} special file",
+    "caption_skipped_special_many": "{count} special files",
+    "caption_skipped_unreadable_one": "{count} unreadable entry",
+    "caption_skipped_unreadable_many": "{count} unreadable entries",
+    "caption_run_id": "🆔 <b>Run ID:</b> {value}",
+    "caption_original_size": "📦 <b>Original Backup Size:</b> {value}",
+    "caption_final_size": "🗜 <b>Final Backup Size:</b> {value}",
+    "caption_part": "📄 <b>Part {number}/{total}</b>",
     "settings_text": (
-        "Connection: MTProto Bot\nSOCKS5: {proxy}\nUpload limit: {limit:,} bytes\n"
-        "Timezone: {timezone}\nSQLite: enabled"
+        "⚙️ <b>Runtime Settings</b>\nConnection: MTProto Bot\nSOCKS5: {proxy}\n"
+        "Upload limit: <code>{limit:,}</code> bytes\nTimezone: <code>{timezone}</code>\n"
+        "SQLite support: enabled"
     ),
     "health_text": (
-        "System: {status}\n{live} Live  {ready} Ready\n"
+        "🩺 <b>System Health</b>\nSystem: {status}\n{live} Live  {ready} Ready\n"
         "{database} Control DB  {schema} Schema {revision}\n"
         "{worker} Worker  {scheduler} Scheduler  {telegram} Telegram\n"
         "Disk free: {disk:,} MB | Pending: {pending:,} MB\n"

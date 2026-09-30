@@ -7,7 +7,7 @@ from infrastructure.repositories import (
     RemoteServerRepository,
 )
 from presentation.telegram.admin_management import AdminManagementMixin
-from presentation.telegram.formatting import TelegramHtml, code, escaped
+from presentation.telegram.formatting import TelegramHtml, code
 from presentation.telegram.i18n import t
 from presentation.telegram.keyboards import (
     cancel_back,
@@ -85,8 +85,8 @@ class RemoteServersMixin(AdminManagementMixin):
                 "username": server.ssh_username,
             },
         )
-        prompt = escaped(t(user.language_code, "ask_server_name_edit"))
-        current = escaped(t(user.language_code, "current_value"))
+        prompt = t(user.language_code, "ask_server_name_edit")
+        current = t(user.language_code, "current_value")
         await self.transport.send_text(
             user.telegram_user_id,
             TelegramHtml(f"{prompt}\n\n{current}\n{code(server.name)}"),
@@ -102,6 +102,7 @@ class RemoteServersMixin(AdminManagementMixin):
     async def _begin_server_delete(self, session: AsyncSession, user: User, target_id: int) -> None:
         server = await RemoteServerRepository(session).active_by_id(target_id)
         await self.fsm.set(user.id, State.CONFIRM_SERVER_DELETE, {"target_id": target_id})
+        await self._send(user, "server_delete_prompt")
         await self.transport.send_text(
             user.telegram_user_id,
             t(

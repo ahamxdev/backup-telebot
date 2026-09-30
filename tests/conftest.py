@@ -26,7 +26,7 @@ def settings(tmp_path: Path) -> Settings:
         PENDING_DELIVERY_ROOT=tmp_path / "pending-delivery",
         TELEGRAM_SESSION_PATH=tmp_path / "telegram" / "bot.session",
         TELEGRAM_WORKER_SESSION_PATH=tmp_path / "telegram" / "worker.session",
-        TELEGRAM_SUPERADMIN_ID=1001,
+        SUPERADMIN_TELEGRAM_IDS="1001",
         TELEGRAM_API_ID=12345,
         TELEGRAM_API_HASH="test-api-hash",
         TELEGRAM_BOT_TOKEN="123:test-token",

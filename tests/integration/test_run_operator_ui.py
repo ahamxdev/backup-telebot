@@ -138,7 +138,7 @@ async def test_run_ui_rechecks_superadmin_and_callback_actor(database, settings)
     await dispatcher.handle(
         Event(normal_admin.telegram_user_id, t(normal_admin.language_code, "active_runs"))
     )
-    assert "not available" in client.messages[-1][1]
+    assert "Option Unavailable" in client.messages[-1][1]
     token = await dispatcher.callbacks.issue(superadmin.id, "run_cancel", run.id)
     await dispatcher.handle(Event(normal_admin.telegram_user_id, data=token))
 
@@ -168,7 +168,7 @@ async def test_run_history_is_paginated_with_actor_bound_tokens(database, settin
 
     await dispatcher.handle(Event(1001, t(superadmin.language_code, "run_history")))
 
-    assert "page 1/2" in client.messages[0][1]
+    assert "Page 1 of 2" in client.messages[0][1]
     assert (
         len([message for _entity, message, _buttons in client.messages if "Run #" in message]) == 8
     )
@@ -180,7 +180,7 @@ async def test_run_history_is_paginated_with_actor_bound_tokens(database, settin
     next_button = client.messages[-1][2][0][0]
     assert next_button.data.startswith(b"v1:")
     await dispatcher.handle(Event(1001, data=next_button.data))
-    assert any("page 2/2" in message for _entity, message, _buttons in client.messages)
+    assert any("Page 2 of 2" in message for _entity, message, _buttons in client.messages)
 
 
 async def test_run_details_show_status_and_only_safe_error(database, settings) -> None:
@@ -234,7 +234,7 @@ async def test_cancel_active_run_from_operator_ui(database, settings) -> None:
         assert stored.status is RunStatus.CANCELLED
         assert stored.cancel_requested
     assert any(
-        "Cancellation requested" in message for _entity, message, _buttons in client.messages
+        "Cancellation Requested" in message for _entity, message, _buttons in client.messages
     )
 
 
@@ -296,7 +296,7 @@ async def test_retry_non_finalized_failure_creates_a_new_run(database, settings)
         assert len(runs) == 2
         assert runs[0].status is RunStatus.FAILED
         assert runs[1].status is RunStatus.QUEUED
-    assert any("new retry run" in message for _entity, message, _buttons in client.messages)
+    assert any("Retry Queued" in message for _entity, message, _buttons in client.messages)
 
 
 async def test_purge_removes_only_verified_artifact_and_keeps_metadata(database, settings) -> None:

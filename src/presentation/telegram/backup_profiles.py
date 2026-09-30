@@ -80,7 +80,11 @@ class BackupProfilesMixin(RemoteServersMixin):
                 )
             else:
                 timezone = (await SettingsService(session).get()).backup_timezone
-                started = format_user_datetime(result.run.started_at, timezone)
+                started = format_user_datetime(
+                    result.run.started_at,
+                    timezone,
+                    t(user.language_code, "timezone_heading"),
+                )
                 await self._send(
                     user,
                     "backup_run_active",
@@ -235,7 +239,7 @@ class BackupProfilesMixin(RemoteServersMixin):
                 buttons=inline,
             )
         await self.transport.send_text(
-            user.telegram_user_id, t(language, "backups"), buttons=backups_menu(language)
+            user.telegram_user_id, t(language, "backups_title"), buttons=backups_menu(language)
         )
 
     async def _select_backup(

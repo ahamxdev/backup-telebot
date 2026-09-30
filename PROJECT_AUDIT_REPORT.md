@@ -189,7 +189,7 @@ Worker migration اجرا نمی‌کند. shutdown عادی cleanup دارد، 
 | `TELEGRAM_API_ID` | Telethon | `None` | bot/worker | خیر | int؛ production non-null. |
 | `TELEGRAM_API_HASH` | Telethon | `None` | bot/worker | بله | `SecretStr`. |
 | `TELEGRAM_BOT_TOKEN` | start bot | `None` | bot/worker | بله | `SecretStr`. |
-| `TELEGRAM_SUPERADMIN_ID` | bootstrap allowlist | `None` | bot/bootstrap | شناسه حساس | positive signed-64-bit (`settings.py:73-78`). |
+| `SUPERADMIN_TELEGRAM_IDS` | bootstrap allowlist | `None` | bot/bootstrap | شناسه حساس | comma-separated positive signed-64-bit IDs with stable de-duplication. |
 | `TELEGRAM_SUPERADMIN_LANGUAGE` | زبان اولین bootstrap | `en` | اختیاری | خیر | enum `en/fa`; پس از وجود SUPERADMIN قبلی آن را تغییر نمی‌دهد. |
 | `TELEGRAM_SESSION_PATH` | session bot | `.runtime/telegram/telegram.session` | اختیاری | بله | parent 0700/file 0600 در startup؛ UI health فقط این session را چک می‌کند. |
 | `TELEGRAM_WORKER_SESSION_PATH` | session worker | `.runtime/telegram/worker.session` | اختیاری | بله | worker آن را به client path تبدیل می‌کند. |

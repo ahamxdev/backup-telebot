@@ -208,7 +208,7 @@ async def test_local_gitlab_worker_path_create_and_edit_use_specific_validation(
         await dispatcher._flow(session, actor, str(root / "missing"), None, create)
 
         assert create.state is State.ADD_BACKUP_GITLAB_WORKER_PATH
-        assert "does not exist inside the backup worker" in client.messages[-1]
+        assert "not visible inside the backup worker" in client.messages[-1]
         assert "gitlab_backup_path" not in create.data
 
         await dispatcher._flow(session, actor, str(root), None, create)

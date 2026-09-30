@@ -38,7 +38,7 @@ async def run_bot(settings: Settings) -> None:
     SecretCipher(key.get_secret_value())
     superadmin_ids = settings.superadmin_telegram_ids()
     if not superadmin_ids:
-        raise ValueError("SUPERADMIN_TELEGRAM_IDS or TELEGRAM_SUPERADMIN_ID is required")
+        raise ValueError("SUPERADMIN_TELEGRAM_IDS is required")
     settings.DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     secure_session_path(settings.TELEGRAM_SESSION_PATH)
     database = Database(settings.DATABASE_URL)
