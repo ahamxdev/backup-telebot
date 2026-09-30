@@ -339,42 +339,6 @@ STRINGS: dict[str, str] = {
     "ask_paths": section("📂", "فایل‌ها و پوشه‌ها", "مسیرهای مطلق را هرکدام در یک خط وارد کنید."),
     "choose_gitlab_location": "📍 <b>مکان گیت‌لب</b>\nاین نمونه گیت‌لب کجا اجرا می‌شود؟",
     "ask_gitlab_container": "🐳 <b>کانتینر گیت‌لب</b>\nنام کانتینر Docker را وارد کنید.",
-    "ask_gitlab_worker_path": (
-        "📂 <b>پوشه بکاپ گیت‌لب</b>\n"
-        "پوشه بکاپ گیت‌لب را همان‌طور که داخل worker متصل شده است وارد کنید."
-    ),
-    "ask_gitlab_worker_path_roots": (
-        "📂 <b>پوشه بکاپ گیت‌لب</b>\n"
-        "پوشه بکاپ گیت‌لب را همان‌طور که داخل worker متصل شده است وارد کنید.\n"
-        "ریشه‌های قابل مشاهده و مجاز:\n{available_roots}"
-    ),
-    "gitlab_worker_path_invalid_path": (
-        "⚠️ <b>مسیر بکاپ نامعتبر است</b>\nمسیر باید مطلق و بدون پیمایش مانند <code>..</code> باشد."
-    ),
-    "gitlab_worker_path_container_escape": section(
-        "⚠️", "مسیر مجاز نیست", "مسیر خارج از ریشه‌های قابل مشاهده و مجاز worker است."
-    ),
-    "gitlab_worker_path_denied_root": section(
-        "⛔", "مسیر محافظت‌شده", "مسیر داخل بخش محافظت‌شده فایل‌سیستم است."
-    ),
-    "gitlab_worker_path_not_found": section(
-        "⚠️", "پوشه پیدا نشد", "پوشه داخل worker بکاپ قابل مشاهده نیست."
-    ),
-    "gitlab_worker_path_not_directory": section(
-        "⚠️", "پوشه لازم است", "مسیر قابل مشاهده در worker یک پوشه نیست."
-    ),
-    "gitlab_worker_path_not_writable": section(
-        "⚠️", "دسترسی نوشتن لازم است", "پوشه داخل worker بکاپ قابل نوشتن نیست."
-    ),
-    "gitlab_worker_path_symlink_escape": section(
-        "⛔", "مسیر ناامن", "پیوند نمادین و خروج از مسیر مجاز نیست."
-    ),
-    "gitlab_worker_path_invalid_configuration": section(
-        "⚠️", "خطای تنظیم mount", "نگاشت mount محلی نامعتبر است؛ با اپراتور تماس بگیرید."
-    ),
-    "gitlab_worker_path_root_not_allowed": section(
-        "⛔", "ریشه رد شد", "ریشه فایل‌سیستم نمی‌تواند منبع مجاز باشد."
-    ),
     "ask_gitlab_remote_path": ("📂 <b>پوشه بکاپ گیت‌لب</b>\nمسیر پوشه روی سرور ریموت را وارد کنید."),
     "no_remote_servers_available": (
         "⚠️ <b>سرور ریموتی در دسترس نیست</b>\n"
@@ -382,8 +346,8 @@ STRINGS: dict[str, str] = {
         "ابتدا یک سرور ریموت اضافه کنید یا میزبان محلی را انتخاب کنید."
     ),
     "gitlab_exclusive_warning": (
-        "⚠️ <b>پوشه اختصاصی بکاپ</b>\nاین پوشه گیت‌لب منحصراً توسط این پروفایل مدیریت "
-        "می‌شود و فایل‌های موجود پیش از هر بکاپ حذف می‌شوند.\nبرای بازیابی کامل، "
+        "🛡 <b>دریافت تأییدشده بکاپ بومی</b>\nابزار محلی فقط همان فایل بومی را پس از "
+        "تأیید اندازه و SHA-256 نسخه مرحله‌بندی‌شده حذف می‌کند.\nبرای بازیابی کامل، "
         "<code>gitlab.rb</code> و <code>gitlab-secrets.json</code> را جداگانه بکاپ بگیرید."
     ),
     "gitlab_source_details": (

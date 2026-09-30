@@ -76,7 +76,6 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
 def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
     assert SOURCE_ACTIONS["source_gitlab"] is SourceType.GITLAB
     container_prompt = t(LanguageCode.ENGLISH, "ask_gitlab_container")
-    path_prompt = t(LanguageCode.ENGLISH, "ask_gitlab_worker_path")
     details = t(
         LanguageCode.ENGLISH,
         "gitlab_source_details",
@@ -87,13 +86,11 @@ def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
     assert container_prompt.startswith("🐳 <b>GitLab Container</b>")
     assert "Docker container name" in container_prompt
     assert "gitlab_natrixo" not in container_prompt
-    assert "host" not in path_prompt.lower()
-    assert "backup worker" in path_prompt.lower()
     assert "Backup Path:</b> /host/gitlab-backups" in details
     assert "Host path" not in details
     warning = t(LanguageCode.ENGLISH, "gitlab_exclusive_warning")
-    assert "managed exclusively by this profile" in warning
-    assert "removed before each new backup" in warning
+    assert "removes only the exact native artifact" in warning
+    assert "SHA-256" in warning
     assert "gitlab.rb" in warning
     assert "gitlab-secrets.json" in warning
 

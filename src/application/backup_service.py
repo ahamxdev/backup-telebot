@@ -51,6 +51,7 @@ class BackupService:
         allowed_local_roots: tuple[str, ...] | None = None,
         denied_local_roots: tuple[str, ...] = ("/proc", "/sys", "/dev", "/run"),
         local_source_mounts: tuple[tuple[str, str], ...] = (),
+        local_gitlab_backup_path: str | None = None,
     ) -> None:
         self.session = session
         self.backups = BackupRepository(session)
@@ -59,10 +60,15 @@ class BackupService:
         self.allowed_local_roots = allowed_local_roots
         self.denied_local_roots = denied_local_roots
         self.local_source_mounts = local_source_mounts
+        self.local_gitlab_backup_path = local_gitlab_backup_path
 
     def _validate_gitlab(self, gitlab: GitLabConfig) -> None:
         gitlab.validate()
         if gitlab.location is SourceLocation.LOCAL and self.allowed_local_roots is not None:
+            if self.local_gitlab_backup_path is not None:
+                if gitlab.backup_path != self.local_gitlab_backup_path:
+                    raise ValueError("local GitLab path does not match helper configuration")
+                return
             LocalSourcePathMapper(
                 self.allowed_local_roots,
                 self.denied_local_roots,

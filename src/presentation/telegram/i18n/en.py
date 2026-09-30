@@ -360,44 +360,6 @@ STRINGS: dict[str, str] = {
     ),
     "choose_gitlab_location": "📍 <b>GitLab Location</b>\nWhere is this GitLab instance running?",
     "ask_gitlab_container": "🐳 <b>GitLab Container</b>\nEnter the Docker container name.",
-    "ask_gitlab_worker_path": (
-        "📂 <b>GitLab Backup Directory</b>\n"
-        "Enter the GitLab backup directory as mounted inside the backup worker."
-    ),
-    "ask_gitlab_worker_path_roots": (
-        "📂 <b>GitLab Backup Directory</b>\n"
-        "Enter the GitLab backup directory as mounted inside the backup worker.\n"
-        "Available worker-visible root(s):\n{available_roots}"
-    ),
-    "gitlab_worker_path_invalid_path": (
-        "⚠️ <b>Invalid Backup Path</b>\nUse an absolute path without traversal "
-        "such as <code>..</code>."
-    ),
-    "gitlab_worker_path_container_escape": section(
-        "⚠️", "Path Not Approved", "The path is outside the approved worker-visible roots."
-    ),
-    "gitlab_worker_path_denied_root": section(
-        "⛔", "Protected Path", "The path is inside a protected filesystem area."
-    ),
-    "gitlab_worker_path_not_found": section(
-        "⚠️", "Directory Not Found", "The directory is not visible inside the backup worker."
-    ),
-    "gitlab_worker_path_not_directory": section(
-        "⚠️", "Directory Required", "The worker-visible path is not a directory."
-    ),
-    "gitlab_worker_path_not_writable": section(
-        "⚠️", "Write Access Required", "The directory is not writable inside the backup worker."
-    ),
-    "gitlab_worker_path_symlink_escape": section(
-        "⛔", "Unsafe Path", "Symbolic links and path escapes are not allowed."
-    ),
-    "gitlab_worker_path_invalid_configuration": (
-        "⚠️ <b>Mount Configuration Error</b>\nThe approved local mount mapping is invalid. "
-        "Contact the operator."
-    ),
-    "gitlab_worker_path_root_not_allowed": section(
-        "⛔", "Root Path Rejected", "The filesystem root cannot be approved as a source."
-    ),
     "ask_gitlab_remote_path": (
         "📂 <b>GitLab Backup Directory</b>\nEnter the directory on the remote server "
         "(for example, <code>/opt/gitlab/data/backups</code>)."
@@ -408,8 +370,8 @@ STRINGS: dict[str, str] = {
         "Add a remote server first, or choose Local Host."
     ),
     "gitlab_exclusive_warning": (
-        "⚠️ <b>Exclusive Backup Directory</b>\nThis GitLab backup directory is managed "
-        "exclusively by this profile. Existing files are removed before each new backup.\n"
+        "🛡 <b>Verified Native Acquisition</b>\nThe local helper removes only the exact native "
+        "artifact after its staged size and SHA-256 have been verified.\n"
         "GitLab application backups do not include all configuration/secrets. Back up "
         "<code>gitlab.rb</code> and <code>gitlab-secrets.json</code> separately "
         "for complete recovery."

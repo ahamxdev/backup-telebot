@@ -143,12 +143,16 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
 ) -> None:
     root = tmp_path / "gitlab-native"
     root.mkdir()
+    staging = tmp_path / "gitlab-staging"
+    staging.mkdir()
     key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     configured = settings.model_copy(
         update={
             "MASTER_ENCRYPTION_KEY_B64": SecretStr(key),
             "ALLOWED_SOURCE_ROOTS": str(root),
             "GITLAB_HELPER_SOCKET": tmp_path / "control" / "helper.sock",
+            "GITLAB_LOCAL_BACKUP_PATH": str(root),
+            "GITLAB_STAGING_ROOT": staging,
             "GITLAB_STABILITY_INTERVAL_SECONDS": 0.001,
             "GITLAB_STABILITY_CHECKS": 2,
             "TELEGRAM_MAX_FILE_BYTES": 128,
@@ -165,6 +169,7 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
         allowed_local_roots=configured.allowed_source_roots(),
         denied_local_roots=configured.denied_source_roots(),
         local_source_mounts=configured.local_source_mounts(),
+        local_gitlab_backup_path=configured.GITLAB_LOCAL_BACKUP_PATH,
     )
     profile = await service.create_gitlab_profile(
         owner,
@@ -179,13 +184,24 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
 
     native_sizes: list[int] = []
 
-    async def invoke(source: GitLabSource, configured_settings, deadline_seconds: float) -> None:
+    async def invoke(
+        source: GitLabSource, configured_settings, deadline_seconds: float
+    ) -> dict[str, object]:
         del source, configured_settings, deadline_seconds
         payload = tmp_path / "gitlab-payload"
         payload.write_bytes(os.urandom(4096))
-        with tarfile.open(root / "200_gitlab_backup.tar", "w") as native:
+        staging_name = "c" * 32 + ".gitlab.tar"
+        staged = staging / staging_name
+        with tarfile.open(staged, "w") as native:
             native.add(payload, arcname="repositories/data")
-        native_sizes.append((root / "200_gitlab_backup.tar").stat().st_size)
+        native_sizes.append(staged.stat().st_size)
+        return {
+            "ok": True,
+            "staging_name": staging_name,
+            "native_name": "200_gitlab_backup.tar",
+            "size": staged.stat().st_size,
+            "sha256": hashlib.sha256(staged.read_bytes()).hexdigest(),
+        }
 
     monkeypatch.setattr(gitlab_provider, "_invoke_helper", invoke)
     queued = await RunService(session).enqueue_manual(owner, profile.id)

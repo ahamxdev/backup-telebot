@@ -1,5 +1,4 @@
 import base64
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -64,7 +63,7 @@ def confirmation_data(server_id: int | None) -> dict[str, Any]:
         "gitlab_remote_server_id": server_id,
         "gitlab_container": "gitlab-primary",
         "gitlab_backup_path": (
-            "/opt/gitlab/data/backups" if server_id is not None else "/srv/backups/gitlab"
+            "/opt/gitlab/data/backups" if server_id is not None else "/gitlab-backups"
         ),
         "schedule": ScheduleConfig(ScheduleKind.MANUAL),
         "compression": CompressionConfig(CompressionFormat.GZIP),
@@ -182,14 +181,10 @@ async def test_local_gitlab_confirm_still_works(database, settings: Settings) ->
         assert profile.gitlab_source.remote_server_id is None
 
 
-async def test_local_gitlab_worker_path_create_and_edit_use_specific_validation(
-    database, settings: Settings, tmp_path: Path
+async def test_local_gitlab_legacy_worker_path_step_uses_fixed_helper_path(
+    database, settings: Settings
 ) -> None:
-    root = tmp_path / "gitlab-backups"
-    root.mkdir()
-    configured_settings = configured(
-        settings.model_copy(update={"ALLOWED_SOURCE_ROOTS": str(root)})
-    )
+    configured_settings = configured(settings)
     client = FakeClient()
     dispatcher = TelegramDispatcher(
         database.session_factory, TelegramTransport(client), configured_settings
@@ -205,46 +200,14 @@ async def test_local_gitlab_worker_path_create_and_edit_use_specific_validation(
             },
         )
 
-        await dispatcher._flow(session, actor, str(root / "missing"), None, create)
-
-        assert create.state is State.ADD_BACKUP_GITLAB_WORKER_PATH
-        assert "not visible inside the backup worker" in client.messages[-1]
-        assert "gitlab_backup_path" not in create.data
-
-        await dispatcher._flow(session, actor, str(root), None, create)
+        await dispatcher._flow(session, actor, "/unmounted/ignored", None, create)
 
         assert create.state is State.ADD_BACKUP_SCHEDULE
-        assert create.data["gitlab_backup_path"] == str(root)
-
-        edit = await dispatcher.fsm.set(
-            actor.id,
-            State.ADD_BACKUP_GITLAB_WORKER_PATH,
-            {
-                "original_source_type": SourceType.GITLAB,
-                "existing_gitlab_location": SourceLocation.LOCAL,
-                "existing_gitlab_backup_path": str(root),
-                "gitlab_location": SourceLocation.LOCAL,
-                "gitlab_container": "gitlab",
-            },
-        )
-
-        await dispatcher._flow(session, actor, "-", None, edit)
-
-        assert edit.state is State.ADD_BACKUP_SCHEDULE
-        assert edit.data["gitlab_backup_path"] == str(root)
+        assert create.data["gitlab_backup_path"] == "/gitlab-backups"
 
 
-async def test_local_gitlab_worker_prompt_lists_only_worker_visible_roots(
-    database, settings: Settings
-) -> None:
-    configured_settings = configured(
-        settings.model_copy(
-            update={
-                "ALLOWED_SOURCE_ROOTS": "/opt/gitlab/data/backups",
-                "LOCAL_SOURCE_MOUNTS": ("/opt/gitlab/data/backups:/host/gitlab-backups"),
-            }
-        )
-    )
+async def test_local_gitlab_skips_worker_path_prompt(database, settings: Settings) -> None:
+    configured_settings = configured(settings)
     client = FakeClient()
     dispatcher = TelegramDispatcher(
         database.session_factory, TelegramTransport(client), configured_settings
@@ -259,9 +222,9 @@ async def test_local_gitlab_worker_prompt_lists_only_worker_visible_roots(
 
         await dispatcher._flow(session, actor, "gitlab", None, item)
 
-        assert item.state is State.ADD_BACKUP_GITLAB_WORKER_PATH
-        assert "/host/gitlab-backups" in client.messages[-1]
-        assert "/opt/gitlab/data/backups" not in client.messages[-1]
+        assert item.state is State.ADD_BACKUP_SCHEDULE
+        assert item.data["gitlab_backup_path"] == "/gitlab-backups"
+        assert all("worker-writable" not in message for message in client.messages)
 
 
 def test_gitlab_wizard_prompts_use_compact_html_style() -> None:

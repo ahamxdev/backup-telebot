@@ -172,7 +172,11 @@ def test_docker_separates_bot_worker_and_confines_socket_to_gitlab_helper() -> N
     helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
     assert "docker.sock" not in bot
     assert "docker.sock" not in worker
-    assert "# - /opt/gitlab/data/backups:/host/gitlab-backups:rw" in compose
+    assert "GITLAB_BACKUP_HOST_PATH" not in bot
+    assert "GITLAB_BACKUP_HOST_PATH" not in worker
+    assert "GITLAB_BACKUP_HOST_PATH" in helper
+    assert "gitlab_staging:/data/gitlab-staging" in worker
+    assert "gitlab_staging:/data/gitlab-staging" in helper
     assert "docker.sock" in helper
     assert "USER 10001:10001" in dockerfile
     for tool in ("postgresql-client", "mariadb-client", "rsync", "zstd", "age"):

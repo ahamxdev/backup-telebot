@@ -52,44 +52,32 @@ phase can use a consistent SQLite snapshot instead of copying a live database fi
 GitLab profiles can target the local host or a trusted remote server. Both modes run GitLab's
 native application backup and pass the single newly created `*_gitlab_backup.tar` through the
 same archive, compression, encryption, multipart delivery, retention, history, and recovery
-pipeline. Local profiles store the worker-visible path and manage that directory exclusively.
-Remote profiles store the directory as seen on the remote server, acquire the stable native tar
+pipeline. For local profiles, `gitlab-helper` alone inspects and manages GitLab's native backup
+directory. Remote profiles store the directory as seen on the remote server, acquire the stable native tar
 over host-key-pinned SSH/rsync, verify its size and SHA-256, and only then remove that exact remote
 file.
 
-The bot and worker do not receive Docker's control socket. For local GitLab only, the optional
-`gitlab-helper` service owns that socket and exposes one Unix-socket operation with a fixed argv
-equivalent to `docker exec -t <validated-container> gitlab-backup create`. Enable it with
-`docker compose --profile local-gitlab up -d`. Set `DOCKER_GID` to the numeric host group that
-owns `/var/run/docker.sock`. Container names accept only a conservative alphanumeric,
-underscore, dot, and hyphen form.
+The bot and worker do not receive Docker's control socket or the GitLab backup-directory bind.
+For local GitLab only, `gitlab-helper` owns the socket and exposes one operation: acquire a native
+backup for a strictly validated container name. It invokes only the fixed argv equivalent to
+`docker exec -t <validated-container> gitlab-backup create`, snapshots the fixed
+`/gitlab-backups` mount before and after, requires exactly one new stable regular tar, copies it
+into the backup-owned `gitlab_staging` volume, re-verifies its size and SHA-256, and only then
+deletes that exact native artifact. The worker independently verifies the staged artifact while
+copying it into its normal workspace, then continues through the standard transforms and delivery.
 
-To use same-host GitLab backup, the operator must add the GitLab backup directory as the same
-read/write bind mount on the `bot` (for immediate wizard validation) and `worker` (for acquisition)
-services, just like a local file/directory source. Configure the host-to-container pair in
-`LOCAL_SOURCE_MOUNTS`; the mount mapping itself is the approval. Then enter only the worker-visible
-target path in Telegram. The bot never asks for or creates the host-side bind source. The base
-Compose file includes commented worker examples for both local file/directory and local GitLab
-mounts; uncomment and edit only the mappings needed by the deployment. Because the bot validates
-local GitLab paths during setup, expose the identical read/write mapping to `bot` in an override:
+To use same-host GitLab backup, set `GITLAB_BACKUP_HOST_PATH` in `.env` (or edit the host side of
+the one `/gitlab-backups` bind under `gitlab-helper`) and start:
 
-```yaml
-services:
-  bot:
-    volumes:
-      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
-  worker:
-    volumes:
-      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
+```console
+docker compose --profile local-gitlab up -d
 ```
 
-```dotenv
-ALLOWED_SOURCE_ROOTS=/host/gitlab-backups
-LOCAL_SOURCE_MOUNTS=/opt/gitlab/data/backups:/host/gitlab-backups
-```
-
-The Telegram value for that mapping is `/host/gitlab-backups`, never the host source path and
-never `/host/opt/gitlab/data/backups`.
+The helper runs as root with only `CHOWN` and `DAC_OVERRIDE`. This lets it read and remove a
+GitLab-owned mode-0700 artifact and assign the staged
+copy to application UID/GID 10001. No ACL package, `setfacl`, ownership discovery, `chmod 777`, or
+GitLab ownership change is needed. Bot and worker remain UID/GID 10001 with all capabilities
+dropped. Telegram asks for the local container name, but not a worker-writable backup path.
 
 For GitLab on another host, choose Remote Server in the GitLab wizard, select an enabled trusted
 server, and enter the container name plus the remote backup directory. Remote mode uses the

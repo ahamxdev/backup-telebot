@@ -22,10 +22,14 @@ from pipeline.errors import PipelineError
 def _settings(tmp_path: Path) -> tuple[Settings, Path]:
     root = tmp_path / "gitlab-backups"
     root.mkdir(parents=True)
+    staging = tmp_path / "gitlab-staging"
+    staging.mkdir()
     settings = Settings(
         APP_ENV="test",
         ALLOWED_SOURCE_ROOTS=str(root),
         GITLAB_HELPER_SOCKET=tmp_path / "control" / "helper.sock",
+        GITLAB_LOCAL_BACKUP_PATH=str(root),
+        GITLAB_STAGING_ROOT=staging,
         GITLAB_STABILITY_INTERVAL_SECONDS=0.05,
         GITLAB_STABILITY_CHECKS=2,
     )
@@ -72,22 +76,6 @@ def test_profile_path_is_worker_visible_and_confined_to_configured_mounts(tmp_pa
         GitLabConfig(SourceLocation.LOCAL, "gitlab", "/").validate()
 
 
-def test_pre_run_cleanup_is_confined_and_rejects_symlinks(tmp_path: Path) -> None:
-    _settings_value, root = _settings(tmp_path)
-    outside = tmp_path / "outside"
-    outside.write_text("keep")
-    (root / "old_gitlab_backup.tar").write_text("old")
-    provider.cleanup_old_backups(root)
-    assert list(root.iterdir()) == []
-    assert outside.read_text() == "keep"
-
-    (root / "escape").symlink_to(outside)
-    with pytest.raises(PipelineError, match="symlinks") as captured:
-        provider.cleanup_old_backups(root)
-    assert captured.value.code == "GITLAB_PATH_ESCAPE"
-    assert outside.read_text() == "keep"
-
-
 def test_new_artifact_detection_is_exact_and_rejects_ambiguity() -> None:
     started = time.time_ns()
     one = provider._FileState("1_gitlab_backup.tar", 1, 10, started)
@@ -103,105 +91,70 @@ def test_new_artifact_detection_is_exact_and_rejects_ambiguity() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stability_check_waits_for_unchanged_observations(
+async def test_worker_acquires_verified_staging_artifact_without_native_directory_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings, root = _settings(tmp_path)
-    artifact = root / "1_gitlab_backup.tar"
-    artifact.write_bytes(b"first")
-    real_sleep = provider.asyncio.sleep
-    calls = 0
+    payload = b"native-gitlab-backup"
+    staging_name = "a" * 32 + ".gitlab.tar"
+    (settings.GITLAB_STAGING_ROOT / staging_name).write_bytes(payload)
 
-    async def changing_sleep(seconds: float) -> None:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            artifact.write_bytes(b"second-version")
-        await real_sleep(seconds)
-
-    monkeypatch.setattr(provider.asyncio, "sleep", changing_sleep)
-    stable = await provider._stable_file(artifact, settings, None)
-    assert stable.size == len(b"second-version")
-    assert calls >= 2
-
-
-@pytest.mark.asyncio
-async def test_successful_acquisition_cleans_native_only_after_verified_copy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    settings, root = _settings(tmp_path)
-    (root / "old_gitlab_backup.tar").write_bytes(b"old")
-
-    async def invoke(source: GitLabSource, configured: Settings, deadline_seconds: float) -> None:
+    async def invoke(
+        source: GitLabSource, configured: Settings, deadline_seconds: float
+    ) -> dict[str, object]:
         assert source.container_name == "gitlab_natrixo"
         assert configured is settings
         assert deadline_seconds > 0
-        (root / "171_gitlab_backup.tar").write_bytes(b"native-gitlab-backup")
+        return {
+            "ok": True,
+            "staging_name": staging_name,
+            "native_name": "171_gitlab_backup.tar",
+            "size": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
 
     monkeypatch.setattr(provider, "_invoke_helper", invoke)
     acquired = await provider.acquire_gitlab(
         _source(root), tmp_path / "workspace" / "source", settings, None
     )
-    assert acquired.path.read_bytes() == b"native-gitlab-backup"
-    assert acquired.original_size_bytes == len(b"native-gitlab-backup")
+    assert acquired.path.read_bytes() == payload
+    assert acquired.original_size_bytes == len(payload)
     assert acquired.metadata["source_cleanup"] == "succeeded"
-    assert list(root.iterdir()) == []
+    assert not (settings.GITLAB_STAGING_ROOT / staging_name).exists()
+    assert list(root.iterdir()) == []  # The worker never needed a native artifact here.
 
 
 @pytest.mark.asyncio
-async def test_native_command_failure_and_copy_failure_preserve_safety(
+async def test_helper_failure_and_staging_checksum_failure_preserve_artifact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings, root = _settings(tmp_path)
-    old = root / "old_gitlab_backup.tar"
-    old.write_bytes(b"old")
 
-    async def failed_command(*args: object) -> None:
+    async def failed_command(*args: object) -> dict[str, object]:
         raise PipelineError("GITLAB_BACKUP_FAILED", "failed")
 
     monkeypatch.setattr(provider, "_invoke_helper", failed_command)
     with pytest.raises(PipelineError) as command_error:
         await provider.acquire_gitlab(_source(root), tmp_path / "source", settings, None)
     assert command_error.value.code == "GITLAB_BACKUP_FAILED"
-    assert not old.exists()
+    staging_name = "b" * 32 + ".gitlab.tar"
+    staged = settings.GITLAB_STAGING_ROOT / staging_name
+    staged.write_bytes(b"native")
 
-    async def successful_command(*args: object) -> None:
-        (root / "172_gitlab_backup.tar").write_bytes(b"native")
-
-    real_copy = provider._copy_and_verify
-
-    def failed_copy(*args: object) -> tuple[int, str]:
-        raise PipelineError("GITLAB_ACQUISITION_FAILED", "failed")
+    async def successful_command(*args: object) -> dict[str, object]:
+        return {
+            "ok": True,
+            "staging_name": staging_name,
+            "native_name": "172_gitlab_backup.tar",
+            "size": len(b"native"),
+            "sha256": "0" * 64,
+        }
 
     monkeypatch.setattr(provider, "_invoke_helper", successful_command)
-    monkeypatch.setattr(provider, "_copy_and_verify", failed_copy)
-    with pytest.raises(PipelineError):
+    with pytest.raises(PipelineError) as checksum_error:
         await provider.acquire_gitlab(_source(root), tmp_path / "source2", settings, None)
-    assert (root / "172_gitlab_backup.tar").read_bytes() == b"native"
-
-    async def restarted_command(*args: object) -> None:
-        assert not (root / "172_gitlab_backup.tar").exists()
-        (root / "173_gitlab_backup.tar").write_bytes(b"recovered")
-
-    monkeypatch.setattr(provider, "_invoke_helper", restarted_command)
-    monkeypatch.setattr(provider, "_copy_and_verify", real_copy)
-    recovered = await provider.acquire_gitlab(
-        _source(root), tmp_path / "restarted" / "source", settings, None
-    )
-    assert recovered.path.read_bytes() == b"recovered"
-    assert list(root.iterdir()) == []
-
-
-def test_approved_root_rejects_symlink_component(tmp_path: Path) -> None:
-    actual = tmp_path / "actual"
-    actual.mkdir()
-    linked = tmp_path / "linked"
-    linked.symlink_to(actual, target_is_directory=True)
-    settings, _unused = _settings(tmp_path / "settings")
-    settings.ALLOWED_SOURCE_ROOTS = str(linked)
-    with pytest.raises(PipelineError) as captured:
-        provider._approved_root(_source(linked), settings)
-    assert captured.value.code == "GITLAB_ROOT_INVALID"
+    assert checksum_error.value.code == "GITLAB_ACQUISITION_FAILED"
+    assert staged.read_bytes() == b"native"
 
 
 def test_worker_directory_validation_reports_safe_specific_reasons(tmp_path: Path) -> None:
@@ -271,6 +224,111 @@ def test_helper_uses_only_fixed_gitlab_command(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(gitlab_helper.docker, "from_env", lambda: Client())
     assert gitlab_helper._run_gitlab_backup("gitlab_natrixo") == (0, "ok")
     assert calls == [(["gitlab-backup", "create"], True, False)]
+
+
+def test_helper_protocol_rejects_arbitrary_docker_and_shell_operations() -> None:
+    from bootstrap import gitlab_helper
+
+    valid = b'{"operation":"gitlab_backup_acquire","container":"gitlab_primary"}\n'
+    assert gitlab_helper._validated_request(valid) == "gitlab_primary"
+    for request in (
+        b'{"operation":"docker_exec","container":"gitlab_primary"}\n',
+        b'{"operation":"gitlab_backup_acquire","container":"gitlab; id"}\n',
+        b'{"operation":"gitlab_backup_acquire","container":"gitlab","command":"id"}\n',
+    ):
+        with pytest.raises(ValueError):
+            gitlab_helper._validated_request(request)
+
+
+def test_helper_owns_complete_native_acquisition_in_restrictive_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bootstrap import gitlab_helper
+
+    native_root = tmp_path / "native"
+    staging_root = tmp_path / "staging"
+    native_root.mkdir(mode=0o700)
+    staging_root.mkdir(mode=0o700)
+    old = native_root / "old_gitlab_backup.tar"
+    old.write_bytes(b"older backup")
+    payload = b"new native backup"
+
+    def run(container_name: str) -> tuple[int, str]:
+        assert container_name == "gitlab_primary"
+        created = native_root / "173_gitlab_backup.tar"
+        created.write_bytes(payload)
+        created.chmod(0o600)
+        return 0, "created"
+
+    monkeypatch.setenv("GITLAB_BACKUP_ROOT", str(native_root))
+    monkeypatch.setenv("GITLAB_STAGING_ROOT", str(staging_root))
+    monkeypatch.setenv("GITLAB_STABILITY_INTERVAL_SECONDS", "0.05")
+    monkeypatch.setattr(gitlab_helper, "_run_gitlab_backup", run)
+    monkeypatch.setattr(gitlab_helper.os, "fchown", lambda *_args: None)
+
+    result = gitlab_helper._acquire("gitlab_primary")
+
+    staged = staging_root / str(result["staging_name"])
+    assert staged.read_bytes() == payload
+    assert result["size"] == len(payload)
+    assert result["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert old.read_bytes() == b"older backup"
+    assert not (native_root / "173_gitlab_backup.tar").exists()
+
+
+def test_helper_stages_sha256_then_cleans_exact_native_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bootstrap import gitlab_helper
+
+    native_root = tmp_path / "native"
+    staging_root = tmp_path / "staging"
+    native_root.mkdir(mode=0o700)
+    staging_root.mkdir(mode=0o700)
+    native = native_root / "171_gitlab_backup.tar"
+    payload = b"verified-native-backup"
+    native.write_bytes(payload)
+    info = native.stat()
+    expected = gitlab_helper.FileState(native.name, info.st_ino, info.st_size, info.st_mtime_ns)
+    ownership: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        gitlab_helper.os,
+        "fchown",
+        lambda _fd, uid, gid: ownership.append((uid, gid)),
+    )
+
+    name, size, checksum = gitlab_helper._stage_verified(native_root, staging_root, expected)
+
+    assert not native.exists()
+    assert (staging_root / name).read_bytes() == payload
+    assert size == len(payload)
+    assert checksum == hashlib.sha256(payload).hexdigest()
+    assert ownership == [(10001, 10001)]
+
+
+def test_helper_does_not_clean_native_artifact_when_staging_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bootstrap import gitlab_helper
+
+    native_root = tmp_path / "native"
+    staging_root = tmp_path / "staging"
+    native_root.mkdir(mode=0o700)
+    staging_root.mkdir(mode=0o700)
+    native = native_root / "172_gitlab_backup.tar"
+    native.write_bytes(b"preserve-me")
+    info = native.stat()
+    expected = gitlab_helper.FileState(native.name, info.st_ino, info.st_size, info.st_mtime_ns)
+
+    def fail_handoff(_fd: int, _uid: int, _gid: int) -> None:
+        raise OSError("simulated staging ownership failure")
+
+    monkeypatch.setattr(gitlab_helper.os, "fchown", fail_handoff)
+    with pytest.raises(OSError, match="ownership failure"):
+        gitlab_helper._stage_verified(native_root, staging_root, expected)
+
+    assert native.read_bytes() == b"preserve-me"
+    assert list(staging_root.iterdir()) == []
 
 
 @pytest.mark.asyncio

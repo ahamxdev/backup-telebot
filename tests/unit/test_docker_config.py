@@ -19,14 +19,20 @@ def test_docker_deployment_security_and_tools() -> None:
     helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
     assert "docker.sock" not in bot
     assert "docker.sock" not in worker
-    assert "# - /opt/gitlab/data/backups:/host/gitlab-backups:rw" in compose
-    assert "GITLAB_BACKUP_HOST_ROOT" not in compose
+    assert "GITLAB_BACKUP_HOST_PATH" not in bot
+    assert "GITLAB_BACKUP_HOST_PATH" not in worker
+    assert "${GITLAB_BACKUP_HOST_PATH:-/opt/gitlab/data/backups}:/gitlab-backups" in helper
     assert "# - /etc:/host/etc:ro" in worker
     assert "gitlab_helper_control:/run/gitlab-helper" in worker
+    assert "gitlab_staging:/data/gitlab-staging" in worker
+    assert "gitlab_staging:/data/gitlab-staging" in helper
+    assert "gitlab_staging:/data/gitlab-staging" not in bot
     assert not (root / "compose.gitlab-local.yml").exists()
     assert "/var/run/docker.sock:/var/run/docker.sock" in helper
     assert 'command: ["backup-gitlab-helper"]' in helper
     assert 'profiles: ["local-gitlab"]' in helper
+    assert 'user: "0:0"' in helper
+    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE"]' in helper
     assert "gitlab-helper:" not in worker.split("depends_on:", 1)[1].split("command:", 1)[0]
     assert 'cap_drop: ["ALL"]' in compose
     assert "source: ./.runtime" in compose
@@ -44,3 +50,16 @@ def test_docker_deployment_security_and_tools() -> None:
     assert "\nvolumes:\n  state:" not in compose
     assert ".env" in dockerignore
     assert ".runtime" in dockerignore
+
+
+def test_local_gitlab_foreign_uid_boundary_is_confined_to_helper() -> None:
+    compose = (Path(__file__).parents[2] / "docker-compose.yml").read_text()
+    bot = compose.split("  bot:", 1)[1].split("\n  worker:", 1)[0]
+    worker = compose.split("  worker:", 1)[1].split("\n  gitlab-helper:", 1)[0]
+    helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
+
+    assert "/gitlab-backups" not in bot
+    assert ":/gitlab-backups" not in worker
+    assert 'user: "0:0"' in helper
+    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE"]' in helper
+    assert 'cap_drop: ["ALL"]' in helper

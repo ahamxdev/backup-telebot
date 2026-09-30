@@ -15,8 +15,6 @@ from application.profile_config import (
     EncryptionConfig,
     FilesConfig,
     GitLabConfig,
-    LocalSourcePathError,
-    LocalSourcePathMapper,
     ScheduleConfig,
     validate_docker_container_name,
 )
@@ -448,29 +446,20 @@ class WizardMixin(LanguageHelpMixin):
                     text = str(item.data["existing_gitlab_container"])
                 item.data["gitlab_container"] = validate_docker_container_name(text)
                 if item.data["gitlab_location"] is SourceLocation.LOCAL:
-                    next_state = State.ADD_BACKUP_GITLAB_WORKER_PATH
-                    prompt = "ask_gitlab_worker_path"
+                    item.data["gitlab_backup_path"] = self.settings.GITLAB_LOCAL_BACKUP_PATH
+                    GitLabConfig(
+                        item.data["gitlab_location"],
+                        item.data["gitlab_container"],
+                        item.data["gitlab_backup_path"],
+                    ).validate()
+                    await self._send(user, "gitlab_exclusive_warning")
+                    await self._advance_to_schedule(session, user, item, state)
                 else:
-                    next_state = State.ADD_BACKUP_GITLAB_REMOTE_PATH
-                    prompt = "ask_gitlab_remote_path"
-                await self.fsm.transition(user.id, state, next_state)
-                if next_state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-                    await self._send_gitlab_worker_path_prompt(user)
-                else:
-                    await self._send(user, prompt, buttons=cancel_back(language))
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_REMOTE_PATH)
+                    await self._send(user, "ask_gitlab_remote_path", buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-                if (
-                    text == "-"
-                    and item.data.get("original_source_type") is SourceType.GITLAB
-                    and item.data.get("existing_gitlab_location") is SourceLocation.LOCAL
-                ):
-                    text = str(item.data["existing_gitlab_backup_path"])
-                candidate = text.strip()
-                LocalSourcePathMapper(
-                    self.settings.allowed_source_roots(),
-                    self.settings.denied_source_roots(),
-                    self.settings.local_source_mounts(),
-                ).validate_writable_container_directory(candidate)
+                # Resume legacy in-flight conversations without touching the host path.
+                candidate = self.settings.GITLAB_LOCAL_BACKUP_PATH
                 GitLabConfig(
                     item.data["gitlab_location"],
                     item.data["gitlab_container"],
@@ -738,33 +727,8 @@ class WizardMixin(LanguageHelpMixin):
             )
             if await self.fsm.invalid(user.id):
                 await self._home(user, "too_many_invalid")
-            elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH and isinstance(
-                exc, LocalSourcePathError
-            ):
-                await self._send(user, "gitlab_worker_path_" + exc.reason)
             else:
                 await self._send(user, "invalid")
-
-    def _gitlab_worker_roots(self) -> TelegramHtml:
-        roots = LocalSourcePathMapper(
-            self.settings.allowed_source_roots(),
-            self.settings.denied_source_roots(),
-            self.settings.local_source_mounts(),
-        ).approved_container_roots()
-        if not roots:
-            return TelegramHtml("")
-        return TelegramHtml("\n".join(f"• {code(root)}" for root in roots))
-
-    async def _send_gitlab_worker_path_prompt(self, user: User, *, current: Any = None) -> None:
-        roots = self._gitlab_worker_roots()
-        key = "ask_gitlab_worker_path_roots" if roots else "ask_gitlab_worker_path"
-        await self._wizard_prompt(
-            user,
-            key,
-            cancel_back(user.language_code),
-            current=current,
-            available_roots=roots,
-        )
 
     async def _back(self, session: AsyncSession, user: User) -> None:
         current = await self.fsm.get(user.id)
@@ -909,11 +873,6 @@ class WizardMixin(LanguageHelpMixin):
                 "ask_gitlab_container",
                 cancel_back(language),
                 "gitlab_container",
-            ),
-            State.ADD_BACKUP_GITLAB_WORKER_PATH: (
-                "ask_gitlab_worker_path",
-                cancel_back(language),
-                "gitlab_backup_path",
             ),
             State.ADD_BACKUP_GITLAB_REMOTE_PATH: (
                 "ask_gitlab_remote_path",
@@ -1074,9 +1033,8 @@ class WizardMixin(LanguageHelpMixin):
         elif item.data.get("view") == "selection":
             await self._render_selection(user, item)
         elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-            await self._send_gitlab_worker_path_prompt(
-                user, current=item.data.get("gitlab_backup_path")
-            )
+            item.data["gitlab_backup_path"] = self.settings.GITLAB_LOCAL_BACKUP_PATH
+            await self._advance_to_schedule(session, user, item, state)
         elif state in simple:
             prompt, buttons, field = simple[state]
             values = {"current": item.data["name"]} if prompt == "ask_edit_backup_name" else {}
@@ -1433,6 +1391,7 @@ class WizardMixin(LanguageHelpMixin):
                 allowed_local_roots=self.settings.allowed_source_roots(),
                 denied_local_roots=self.settings.denied_source_roots(),
                 local_source_mounts=self.settings.local_source_mounts(),
+                local_gitlab_backup_path=self.settings.GITLAB_LOCAL_BACKUP_PATH,
             )
             if item.data["source_type"] is SourceType.DATABASE:
                 preserve_password = bool(item.data.get("preserve_database_password"))
