@@ -1,13 +1,39 @@
+# Local configuration and runtime state
 .env
-.venv/
 .runtime/
 *.session
 *.session-journal
+
+# Python environments, bytecode, caches, and test output
+.venv/
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.py[cod]
-dist/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+
+# Build and packaging output
 build/
+dist/
+*.egg-info/
+
+# Local logs and editor history
+*.log
+*_log.txt
 .history/
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db

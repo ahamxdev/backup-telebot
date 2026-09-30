@@ -1,3 +1,0 @@
-bot-1  | Connecting to 149.154.167.92:443/TcpFull...
-bot-1  | Connection to 149.154.167.92:443/TcpFull complete!
-bot-1  | [2m2026-09-14T19:29:46.412614Z[0m [[32m[1minfo     [0m] [1mbot_started                   [0m [36mproxy_enabled[0m=[35mTrue[0m

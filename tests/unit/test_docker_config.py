@@ -4,7 +4,7 @@ from pathlib import Path
 def test_docker_deployment_security_and_tools() -> None:
     root = Path(__file__).parents[2]
     dockerfile = (root / "Dockerfile").read_text()
-    compose = (root / "compose.yml").read_text()
+    compose = (root / "docker-compose.yml").read_text()
     dockerignore = (root / ".dockerignore").read_text().splitlines()
     assert "@sha256:" in dockerfile
     assert "snapshot.debian.org" in dockerfile

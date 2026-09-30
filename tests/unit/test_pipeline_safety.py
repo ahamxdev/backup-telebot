@@ -163,7 +163,7 @@ def test_disk_backpressure(settings, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_docker_separates_bot_worker_and_confines_socket_to_gitlab_helper() -> None:
-    compose = Path("compose.yml").read_text()
+    compose = Path("docker-compose.yml").read_text()
     dockerfile = Path("Dockerfile").read_text()
     assert "bot:" in compose and "worker:" in compose
     assert "backup-bot" in compose and "backup-worker" in compose
