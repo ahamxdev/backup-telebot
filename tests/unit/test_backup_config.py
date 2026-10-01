@@ -159,20 +159,20 @@ def test_host_path_mapper_reverses_only_configured_legacy_targets() -> None:
     assert global_root.value.reason == "root_not_allowed"
 
 
-def test_worker_visible_gitlab_mount_target_is_the_approved_path() -> None:
+def test_worker_visible_local_file_mount_target_is_the_approved_path() -> None:
     mapper = LocalSourcePathMapper(
         ("/srv/backups",),
         ("/proc",),
-        (("/opt/gitlab/data/backups", "/host/gitlab-backups"),),
+        (("/opt/application/data", "/host/application-data"),),
     )
 
-    assert mapper.validate_container_path("/host/gitlab-backups") == "/host/gitlab-backups"
-    assert mapper.approved_container_roots() == ("/srv/backups", "/host/gitlab-backups")
+    assert mapper.validate_container_path("/host/application-data") == "/host/application-data"
+    assert mapper.approved_container_roots() == ("/srv/backups", "/host/application-data")
     with pytest.raises(LocalSourcePathError) as host_style:
-        mapper.validate_container_path("/host/opt/gitlab/data/backups")
+        mapper.validate_container_path("/host/unmapped/data")
     assert host_style.value.reason == "container_escape"
     with pytest.raises(LocalSourcePathError) as actual_host:
-        mapper.validate_container_path("/opt/gitlab/data/backups")
+        mapper.validate_container_path("/opt/application/data")
     assert actual_host.value.reason == "container_escape"
 
 

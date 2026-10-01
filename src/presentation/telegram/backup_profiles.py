@@ -138,12 +138,17 @@ class BackupProfilesMixin(RemoteServersMixin):
                     if profile.gitlab_source.location is SourceLocation.LOCAL
                     else "source_location_remote"
                 )
+                detail_key = (
+                    "gitlab_source_details_local"
+                    if profile.gitlab_source.location is SourceLocation.LOCAL
+                    else "gitlab_source_details_remote"
+                )
                 source_details = t(
                     language,
-                    "gitlab_source_details",
+                    detail_key,
                     location=t(language, location_key),
                     container=code(profile.gitlab_source.container_name),
-                    backup_path=code(profile.gitlab_source.backup_path),
+                    backup_path=code(profile.gitlab_source.backup_path or ""),
                 )
             elif profile.database_source is not None:
                 source_details = t(
@@ -302,9 +307,10 @@ class BackupProfilesMixin(RemoteServersMixin):
                     "existing_gitlab_location": profile.gitlab_source.location,
                     "existing_gitlab_remote_server_id": profile.gitlab_source.remote_server_id,
                     "existing_gitlab_container": profile.gitlab_source.container_name,
-                    "existing_gitlab_backup_path": profile.gitlab_source.backup_path,
                 }
             )
+            if profile.gitlab_source.location is SourceLocation.REMOTE_SERVER:
+                data["existing_gitlab_backup_path"] = profile.gitlab_source.backup_path
         item = await self.fsm.set(user.id, State.ADD_BACKUP_NAME, data)
         await self._send(
             user,

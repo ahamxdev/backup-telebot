@@ -85,8 +85,6 @@ services:
           create_host_path: false
       # Local File / Directory
       - /etc:/host/etc:ro
-      # Local GitLab
-      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
 
   worker:
     <<: *service
@@ -105,10 +103,9 @@ services:
         bind:
           create_host_path: false
       - gitlab_helper_control:/run/gitlab-helper
+      - gitlab_staging:/data/gitlab-staging
       # Local File / Directory
       - /etc:/host/etc:ro
-      # Local GitLab
-      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
       # ---------------------------------------------------------------------------
       # Local File / Directory Backup
       # Uncomment and edit this bind mount when the worker must back up files
@@ -120,19 +117,6 @@ services:
       # /etc                      /host/etc
       #
       # - /etc:/host/etc:ro
-      # ---------------------------------------------------------------------------
-      # Local GitLab Backup
-      # Uncomment and edit this bind mount only when GitLab runs on this same host.
-      # GitLab native backups must be writable because the worker manages the
-      # generated native backup artifact after verified acquisition. The left side
-      # is the host filesystem path; the right side is worker-visible. Enter the
-      # worker-visible path in Telegram Local GitLab and keep LOCAL_SOURCE_MOUNTS
-      # consistent with this mapping.
-      #
-      # Host path                         Worker-visible path
-      # /opt/gitlab/data/backups          /host/gitlab-backups
-      #
-      # - /opt/gitlab/data/backups:/host/gitlab-backups:rw
 
   gitlab-helper:
     build: .
@@ -140,11 +124,15 @@ services:
     command: ["backup-gitlab-helper"]
     environment:
       GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
+      GITLAB_BACKUP_ROOT: /gitlab-backups
+      GITLAB_STAGING_ROOT: /data/gitlab-staging
     restart: unless-stopped
     init: true
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE"]
+    user: "0:0"
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 64
@@ -153,6 +141,8 @@ services:
       - ${DOCKER_GID:-999}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${GITLAB_BACKUP_HOST_PATH:-/opt/gitlab/data/backups}:/gitlab-backups:rw
+      - gitlab_staging:/data/gitlab-staging
       - gitlab_helper_control:/run/gitlab-helper
 
   cli:
@@ -171,3 +161,4 @@ services:
 volumes:
   postgres_data_v18:
   gitlab_helper_control:
+  gitlab_staging:

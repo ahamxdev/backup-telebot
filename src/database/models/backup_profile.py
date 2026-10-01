@@ -285,7 +285,11 @@ class GitLabSource(Base):
             name="ck_gitlab_sources_remote_consistency",
         ),
         CheckConstraint("length(container_name) BETWEEN 1 AND 128", name="ck_gitlab_container"),
-        CheckConstraint("length(backup_path) > 1", name="ck_gitlab_backup_path"),
+        CheckConstraint(
+            "(location = 'LOCAL' AND backup_path IS NULL) OR "
+            "(location = 'REMOTE_SERVER' AND length(backup_path) > 1)",
+            name="ck_gitlab_backup_path",
+        ),
     )
 
     profile_id: Mapped[int] = mapped_column(
@@ -296,7 +300,7 @@ class GitLabSource(Base):
         ForeignKey("remote_servers.id", ondelete="RESTRICT")
     )
     container_name: Mapped[str] = mapped_column(String(128))
-    backup_path: Mapped[str] = mapped_column(String(1024))
+    backup_path: Mapped[str | None] = mapped_column(String(1024))
     profile: Mapped[BackupProfile] = relationship(back_populates="gitlab_source")
     remote_server: Mapped[RemoteServer | None] = relationship()
 

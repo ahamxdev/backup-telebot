@@ -29,10 +29,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
     session: AsyncSession,
 ) -> None:
     actor, _created = await BootstrapService(session).bootstrap_superadmin(1001)
-    service = BackupService(
-        session,
-        allowed_local_roots=("/host/gitlab-backups",),
-    )
+    service = BackupService(session)
     common = {
         "description": "native GitLab",
         "schedule": ScheduleConfig(ScheduleKind.DAILY, time="02:00"),
@@ -43,7 +40,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
     profile = await service.create_gitlab_profile(
         actor,
         name="gitlab",
-        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab_natrixo", "/host/gitlab-backups"),
+        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab_natrixo"),
         **common,
     )
     assert profile.source_type is SourceType.GITLAB
@@ -55,7 +52,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
         profile.id,
         name="gitlab",
         source_type=SourceType.GITLAB,
-        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab_primary", "/host/gitlab-backups"),
+        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab_primary"),
         database=None,
         files=None,
         enabled=True,
@@ -70,7 +67,7 @@ async def test_gitlab_profile_create_edit_and_durable_run_snapshot(
     assert restored.gitlab_source is not None
     assert restored.gitlab_source.container_name == "gitlab_primary"
     assert restored.gitlab_source.location is SourceLocation.LOCAL
-    assert restored.gitlab_source.backup_path == "/host/gitlab-backups"
+    assert restored.gitlab_source.backup_path is None
 
 
 def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
@@ -78,15 +75,14 @@ def test_gitlab_is_first_class_wizard_source_with_required_warnings() -> None:
     container_prompt = t(LanguageCode.ENGLISH, "ask_gitlab_container")
     details = t(
         LanguageCode.ENGLISH,
-        "gitlab_source_details",
+        "gitlab_source_details_local",
         location="Local Host",
         container="gitlab",
-        backup_path="/host/gitlab-backups",
     )
     assert container_prompt.startswith("🐳 <b>GitLab Container</b>")
     assert "Docker container name" in container_prompt
     assert "gitlab_natrixo" not in container_prompt
-    assert "Backup Path:</b> /host/gitlab-backups" in details
+    assert "Backup Path" not in details
     assert "Host path" not in details
     warning = t(LanguageCode.ENGLISH, "gitlab_exclusive_warning")
     assert "removes only the exact native artifact" in warning

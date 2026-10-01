@@ -51,7 +51,6 @@ class BackupService:
         allowed_local_roots: tuple[str, ...] | None = None,
         denied_local_roots: tuple[str, ...] = ("/proc", "/sys", "/dev", "/run"),
         local_source_mounts: tuple[tuple[str, str], ...] = (),
-        local_gitlab_backup_path: str | None = None,
     ) -> None:
         self.session = session
         self.backups = BackupRepository(session)
@@ -60,20 +59,9 @@ class BackupService:
         self.allowed_local_roots = allowed_local_roots
         self.denied_local_roots = denied_local_roots
         self.local_source_mounts = local_source_mounts
-        self.local_gitlab_backup_path = local_gitlab_backup_path
 
     def _validate_gitlab(self, gitlab: GitLabConfig) -> None:
         gitlab.validate()
-        if gitlab.location is SourceLocation.LOCAL and self.allowed_local_roots is not None:
-            if self.local_gitlab_backup_path is not None:
-                if gitlab.backup_path != self.local_gitlab_backup_path:
-                    raise ValueError("local GitLab path does not match helper configuration")
-                return
-            LocalSourcePathMapper(
-                self.allowed_local_roots,
-                self.denied_local_roots,
-                self.local_source_mounts,
-            ).validate_container_path(gitlab.backup_path)
 
     def _persisted_file_paths(self, files: FilesConfig) -> tuple[str, ...]:
         if files.location is not SourceLocation.LOCAL or self.allowed_local_roots is None:
@@ -288,7 +276,7 @@ class BackupService:
                 location=gitlab.location,
                 remote_server_id=gitlab.remote_server_id,
                 container_name=gitlab.container_name.strip(),
-                backup_path=gitlab.backup_path.strip(),
+                backup_path=gitlab.backup_path.strip() if gitlab.backup_path is not None else None,
             )
         await self.session.flush()
         await AccessRepository(self.session).replace_for_profile(profile.id, admin_ids, actor.id)
@@ -548,7 +536,7 @@ class BackupService:
                 location=gitlab.location,
                 remote_server_id=gitlab.remote_server_id,
                 container_name=gitlab.container_name.strip(),
-                backup_path=gitlab.backup_path.strip(),
+                backup_path=gitlab.backup_path.strip() if gitlab.backup_path is not None else None,
             )
         else:
             raise ValueError("source configuration is required")
@@ -605,13 +593,16 @@ class BackupService:
                 GitLabSource.remote_server_id.is_(gitlab.remote_server_id)
                 if gitlab.remote_server_id is None
                 else GitLabSource.remote_server_id == gitlab.remote_server_id,
-                GitLabSource.backup_path == gitlab.backup_path,
             )
         )
+        if gitlab.location is SourceLocation.LOCAL:
+            query = query.where(GitLabSource.container_name == gitlab.container_name)
+        else:
+            query = query.where(GitLabSource.backup_path == gitlab.backup_path)
         if exclude_profile_id is not None:
             query = query.where(GitLabSource.profile_id != exclude_profile_id)
         if await self.session.scalar(query) is not None:
-            raise ValueError("GitLab backup root is already managed by another profile")
+            raise ValueError("GitLab source is already managed by another profile")
 
     async def _reserve_profile(self, profile_id: int) -> None:
         """Take the same row-level write fence used while a run snapshot is queued."""

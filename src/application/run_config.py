@@ -139,13 +139,15 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
             ],
         }
     if gitlab is not None:
-        payload["gitlab"] = {
+        gitlab_payload = {
             "location": gitlab.location.value,
             "remote_server_id": gitlab.remote_server_id,
             "remote_server": _remote(gitlab.__dict__.get("remote_server")),
             "container_name": gitlab.container_name,
-            "backup_path": gitlab.backup_path,
         }
+        if gitlab.location is SourceLocation.REMOTE_SERVER:
+            gitlab_payload["backup_path"] = gitlab.backup_path
+        payload["gitlab"] = gitlab_payload
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
@@ -250,7 +252,9 @@ def restore_run_config(snapshot: str) -> BackupProfile:
             location=SourceLocation(gitlab["location"]),
             remote_server_id=gitlab["remote_server_id"],
             container_name=str(gitlab["container_name"]),
-            backup_path=str(gitlab["backup_path"]),
+            backup_path=(
+                str(gitlab["backup_path"]) if gitlab.get("backup_path") is not None else None
+            ),
         )
         gitlab_source.remote_server = _restore_remote(gitlab["remote_server"])
         profile.gitlab_source = gitlab_source

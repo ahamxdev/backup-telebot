@@ -141,17 +141,13 @@ async def test_local_worker_pipeline_to_delivery_and_cleanup(
 async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline(
     database, session, settings, tmp_path: Path, monkeypatch
 ) -> None:
-    root = tmp_path / "gitlab-native"
-    root.mkdir()
     staging = tmp_path / "gitlab-staging"
     staging.mkdir()
     key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     configured = settings.model_copy(
         update={
             "MASTER_ENCRYPTION_KEY_B64": SecretStr(key),
-            "ALLOWED_SOURCE_ROOTS": str(root),
             "GITLAB_HELPER_SOCKET": tmp_path / "control" / "helper.sock",
-            "GITLAB_LOCAL_BACKUP_PATH": str(root),
             "GITLAB_STAGING_ROOT": staging,
             "GITLAB_STABILITY_INTERVAL_SECONDS": 0.001,
             "GITLAB_STABILITY_CHECKS": 2,
@@ -163,19 +159,12 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     admin = User(telegram_user_id=202, display_name="admin", role=Role.ADMIN)
     session.add_all((owner, admin))
     await session.flush()
-    service = BackupService(
-        session,
-        SecretCipher(key),
-        allowed_local_roots=configured.allowed_source_roots(),
-        denied_local_roots=configured.denied_source_roots(),
-        local_source_mounts=configured.local_source_mounts(),
-        local_gitlab_backup_path=configured.GITLAB_LOCAL_BACKUP_PATH,
-    )
+    service = BackupService(session, SecretCipher(key))
     profile = await service.create_gitlab_profile(
         owner,
         name="GitLab E2E",
         description=None,
-        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab", str(root)),
+        gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab"),
         schedule=ScheduleConfig(ScheduleKind.MANUAL),
         compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
         encryption=EncryptionConfig(EncryptionMode.AGE_PASSPHRASE, passphrase="strong secret"),
@@ -224,7 +213,6 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
     expected_original = f"{native_sizes[0] / 1024:.2f} KiB"
     assert all(expected_original in caption for caption in transport.captions)
     assert all("Final Backup Size:" in caption for caption in transport.captions)
-    assert list(root.iterdir()) == []
 
 
 async def test_remote_gitlab_persists_verified_native_size_before_transforms(

@@ -413,6 +413,7 @@ class WizardMixin(LanguageHelpMixin):
                 )
                 item.data.pop("gitlab_remote_server_id", None)
                 item.data.pop("remote_server_name", None)
+                item.data.pop("gitlab_backup_path", None)
                 if item.data["gitlab_location"] is SourceLocation.LOCAL:
                     await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_CONTAINER)
                     await self._send(user, "ask_gitlab_container", buttons=cancel_back(language))
@@ -446,28 +447,15 @@ class WizardMixin(LanguageHelpMixin):
                     text = str(item.data["existing_gitlab_container"])
                 item.data["gitlab_container"] = validate_docker_container_name(text)
                 if item.data["gitlab_location"] is SourceLocation.LOCAL:
-                    item.data["gitlab_backup_path"] = self.settings.GITLAB_LOCAL_BACKUP_PATH
                     GitLabConfig(
                         item.data["gitlab_location"],
                         item.data["gitlab_container"],
-                        item.data["gitlab_backup_path"],
                     ).validate()
                     await self._send(user, "gitlab_exclusive_warning")
                     await self._advance_to_schedule(session, user, item, state)
                 else:
                     await self.fsm.transition(user.id, state, State.ADD_BACKUP_GITLAB_REMOTE_PATH)
                     await self._send(user, "ask_gitlab_remote_path", buttons=cancel_back(language))
-            elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-                # Resume legacy in-flight conversations without touching the host path.
-                candidate = self.settings.GITLAB_LOCAL_BACKUP_PATH
-                GitLabConfig(
-                    item.data["gitlab_location"],
-                    item.data["gitlab_container"],
-                    candidate,
-                ).validate()
-                item.data["gitlab_backup_path"] = candidate
-                await self._send(user, "gitlab_exclusive_warning")
-                await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_GITLAB_REMOTE_PATH:
                 if (
                     text == "-"
@@ -1035,9 +1023,6 @@ class WizardMixin(LanguageHelpMixin):
             await self._access_keyboard(user, item, admin_direction=False)
         elif item.data.get("view") == "selection":
             await self._render_selection(user, item)
-        elif state is State.ADD_BACKUP_GITLAB_WORKER_PATH:
-            item.data["gitlab_backup_path"] = self.settings.GITLAB_LOCAL_BACKUP_PATH
-            await self._advance_to_schedule(session, user, item, state)
         elif state in simple:
             prompt, buttons, field = simple[state]
             values = {"current": item.data["name"]} if prompt == "ask_edit_backup_name" else {}
@@ -1164,12 +1149,17 @@ class WizardMixin(LanguageHelpMixin):
                 if item.data["gitlab_location"] is SourceLocation.LOCAL
                 else "source_location_remote"
             )
+            detail_key = (
+                "gitlab_source_details_local"
+                if item.data["gitlab_location"] is SourceLocation.LOCAL
+                else "gitlab_source_details_remote"
+            )
             source_details = t(
                 user.language_code,
-                "gitlab_source_details",
+                detail_key,
                 location=t(user.language_code, location_key),
                 container=code(item.data["gitlab_container"]),
-                backup_path=code(item.data["gitlab_backup_path"]),
+                backup_path=code(item.data.get("gitlab_backup_path", "")),
             )
         buttons = await self._backup_confirm_buttons(user, item)
         await self._send(
@@ -1225,12 +1215,11 @@ class WizardMixin(LanguageHelpMixin):
                 if field not in item.data:
                     return "source"
         elif item.data["source_type"] is SourceType.GITLAB:
-            for field in ("gitlab_location", "gitlab_container", "gitlab_backup_path"):
+            for field in ("gitlab_location", "gitlab_container"):
                 if field not in item.data:
                     return "source"
-            if (
-                item.data["gitlab_location"] is SourceLocation.REMOTE_SERVER
-                and "gitlab_remote_server_id" not in item.data
+            if item.data["gitlab_location"] is SourceLocation.REMOTE_SERVER and (
+                "gitlab_remote_server_id" not in item.data or "gitlab_backup_path" not in item.data
             ):
                 return "source"
         else:
@@ -1394,7 +1383,6 @@ class WizardMixin(LanguageHelpMixin):
                 allowed_local_roots=self.settings.allowed_source_roots(),
                 denied_local_roots=self.settings.denied_source_roots(),
                 local_source_mounts=self.settings.local_source_mounts(),
-                local_gitlab_backup_path=self.settings.GITLAB_LOCAL_BACKUP_PATH,
             )
             if item.data["source_type"] is SourceType.DATABASE:
                 preserve_password = bool(item.data.get("preserve_database_password"))
@@ -1437,7 +1425,7 @@ class WizardMixin(LanguageHelpMixin):
                 gitlab = GitLabConfig(
                     item.data["gitlab_location"],
                     item.data["gitlab_container"],
-                    item.data["gitlab_backup_path"],
+                    item.data.get("gitlab_backup_path"),
                     item.data.get("gitlab_remote_server_id"),
                 )
                 if "editing_profile_id" in item.data:

@@ -77,7 +77,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         } <= run_columns
         run_indexes = {row[1] for row in connection.execute("PRAGMA index_list(backup_runs)")}
         assert "ix_backup_runs_failed_artifact_cleanup_at" in run_indexes
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0022",)
         gitlab_columns = {row[1] for row in connection.execute("PRAGMA table_info(gitlab_sources)")}
         assert "backup_path" in gitlab_columns
         assert "host_backup_path" not in gitlab_columns
@@ -191,7 +191,7 @@ def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Pa
         assert connection.execute("SELECT event_type FROM audit_events").fetchone() == (
             "preserved",
         )
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0022",)
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_heartbeats'"
         ).fetchone() == ("runtime_heartbeats",)
@@ -254,8 +254,60 @@ def test_historical_0017_gitlab_schema_is_reconciled_without_data_loss(tmp_path:
         assert connection.execute(
             "SELECT location, remote_server_id, container_name, backup_path "
             "FROM gitlab_sources WHERE profile_id = 1"
-        ).fetchone() == ("LOCAL", None, "gitlab", "/worker/gitlab/backups")
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
+        ).fetchone() == ("LOCAL", None, "gitlab", None)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0022",)
+
+
+def test_0022_removes_only_local_gitlab_paths(tmp_path: Path) -> None:
+    database = tmp_path / "local-gitlab-helper.sqlite3"
+    _upgrade(database, "0021")
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            INSERT INTO users
+                (id, telegram_user_id, display_name, role, language_code, enabled,
+                 created_at, updated_at)
+            VALUES
+                (1, 6101, 'owner', 'SUPERADMIN', 'en', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO remote_servers
+                (id, name, host, ssh_port, ssh_username, encrypted_private_key,
+                 host_key_fingerprint, enabled, created_at, updated_at,
+                 authentication_method)
+            VALUES
+                (1, 'remote', 'gitlab.example', 22, 'backup', X'00', 'SHA256:test', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'PRIVATE_KEY');
+            INSERT INTO backup_profiles
+                (id, uuid, name, source_type, enabled, status, schedule_kind,
+                 compression_format, compression_preset, encryption_mode, created_by,
+                 created_at, updated_at)
+            VALUES
+                (1, '00000000-0000-4000-8000-000000006101', 'local', 'GITLAB',
+                 1, 'DRAFT', 'MANUAL', 'NONE', NULL, 'NONE', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                (2, '00000000-0000-4000-8000-000000006102', 'remote', 'GITLAB',
+                 1, 'DRAFT', 'MANUAL', 'NONE', NULL, 'NONE', 1,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO gitlab_sources
+                (profile_id, location, remote_server_id, container_name, backup_path)
+            VALUES
+                (1, 'LOCAL', NULL, 'gitlab-local', '/host/gitlab-backups'),
+                (2, 'REMOTE_SERVER', 1, 'gitlab-remote', '/srv/gitlab/backups');
+            """
+        )
+
+    _upgrade(database, "head")
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT profile_id, backup_path FROM gitlab_sources ORDER BY profile_id"
+        ).fetchall() == [(1, None), (2, "/srv/gitlab/backups")]
+        backup_path = next(
+            row
+            for row in connection.execute("PRAGMA table_info(gitlab_sources)")
+            if row[1] == "backup_path"
+        )
+        assert backup_path[3] == 0
 
 
 def test_disposable_0006_database_upgrades_to_0011_without_data_loss(tmp_path: Path) -> None:

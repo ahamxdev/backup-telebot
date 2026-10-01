@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -79,7 +79,6 @@ class Settings(BaseSettings):
     UPLOAD_PROGRESS_INTERVAL_SECONDS: int = Field(default=5, ge=1, le=300)
     POSTGRES_CLIENT_ROOT: Path = Path("/usr/lib/postgresql")
     GITLAB_HELPER_SOCKET: Path = Path("/run/gitlab-helper/helper.sock")
-    GITLAB_LOCAL_BACKUP_PATH: str = "/gitlab-backups"
     GITLAB_STAGING_ROOT: Path = Path("/data/gitlab-staging")
     GITLAB_STABILITY_INTERVAL_SECONDS: float = Field(default=1.0, ge=0.05, le=60)
     GITLAB_STABILITY_CHECKS: int = Field(default=2, ge=2, le=20)
@@ -153,13 +152,6 @@ class Settings(BaseSettings):
             raise ValueError("TELEGRAM_RETRY_MAX_SECONDS must be at least the retry base")
         if self.MAX_SOURCE_SINGLE_FILE_BYTES > self.MAX_SOURCE_BYTES_PER_RUN:
             raise ValueError("MAX_SOURCE_SINGLE_FILE_BYTES cannot exceed the per-run byte limit")
-        local_gitlab_path = PurePosixPath(self.GITLAB_LOCAL_BACKUP_PATH)
-        if (
-            not self.GITLAB_LOCAL_BACKUP_PATH.startswith("/")
-            or ".." in local_gitlab_path.parts
-            or local_gitlab_path == PurePosixPath("/")
-        ):
-            raise ValueError("GITLAB_LOCAL_BACKUP_PATH must be a safe absolute path")
         if not self.GITLAB_STAGING_ROOT.is_absolute():
             raise ValueError("GITLAB_STAGING_ROOT must be absolute")
         if self.HEALTH_WORKER_STALE_SECONDS <= self.HEALTH_HEARTBEAT_INTERVAL_SECONDS:

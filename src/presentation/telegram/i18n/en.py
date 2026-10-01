@@ -378,7 +378,10 @@ STRINGS: dict[str, str] = {
         "<code>gitlab.rb</code> and <code>gitlab-secrets.json</code> separately "
         "for complete recovery."
     ),
-    "gitlab_source_details": (
+    "gitlab_source_details_local": (
+        "\n🦊 <b>GitLab source</b>\n📍 <b>Location:</b> {location}\n<b>Container:</b> {container}"
+    ),
+    "gitlab_source_details_remote": (
         "\n🦊 <b>GitLab source</b>\n📍 <b>Location:</b> {location}"
         "\n<b>Container:</b> {container}\n<b>Backup Path:</b> {backup_path}"
     ),

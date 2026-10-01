@@ -169,11 +169,7 @@ async def _acquire_local_gitlab(
     settings: Settings,
     deadline: RunDeadline | None,
 ) -> SourceArtifact:
-    GitLabConfig(source.location, source.container_name, source.backup_path).validate()
-    if source.backup_path != settings.GITLAB_LOCAL_BACKUP_PATH:
-        raise PipelineError(
-            "GITLAB_ROOT_INVALID", "local GitLab path does not match helper configuration"
-        )
+    GitLabConfig(source.location, source.container_name).validate()
     with _exclusive_lock(settings):
         deadline_seconds = (
             deadline.remaining() if deadline is not None else settings.MAX_BACKUP_RUNTIME_SECONDS
@@ -356,6 +352,8 @@ async def _acquire_remote_gitlab(
     GitLabConfig(
         source.location, source.container_name, source.backup_path, source.remote_server_id
     ).validate()
+    if source.backup_path is None:
+        raise PipelineError("INVALID_PROFILE", "remote GitLab backup path is missing")
     root = _validate_remote_path(source.backup_path)
     if root == "/" or PurePosixPath(root).name in {".", ".."}:
         raise PipelineError("GITLAB_ROOT_INVALID", "remote GitLab backup root is unsafe")

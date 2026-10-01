@@ -145,17 +145,13 @@ async def test_gitlab_location_back_navigation_preserves_draft(
         await dispatcher._flow(session, actor, "", "location_local", item)
         assert item.state is State.ADD_BACKUP_GITLAB_CONTAINER
         assert item.data["gitlab_location"] is SourceLocation.LOCAL
-        item.data["gitlab_container"] = "gitlab"
-        await dispatcher.fsm.transition(
-            actor.id,
-            State.ADD_BACKUP_GITLAB_CONTAINER,
-            State.ADD_BACKUP_GITLAB_WORKER_PATH,
-        )
-        item.data["gitlab_backup_path"] = "/host/gitlab-backups"
+        await dispatcher._flow(session, actor, "gitlab", None, item)
+        assert item.state is State.ADD_BACKUP_SCHEDULE
+        assert "gitlab_backup_path" not in item.data
 
         await dispatcher._back(session, actor)
         assert "<b>GitLab Container</b>" in client.messages[-1]
         assert "gitlab" in client.messages[-1]
         await dispatcher._back(session, actor)
         assert client.messages[-1] == t(LanguageCode.ENGLISH, "choose_gitlab_location")
-        assert item.data["gitlab_backup_path"] == "/host/gitlab-backups"
+        assert "gitlab_backup_path" not in item.data

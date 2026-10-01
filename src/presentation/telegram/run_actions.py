@@ -223,12 +223,17 @@ class RunActionsMixin(BackupProfilesMixin):
                 if profile.gitlab_source.location is SourceLocation.LOCAL
                 else "source_location_remote"
             )
+            detail_key = (
+                "gitlab_source_details_local"
+                if profile.gitlab_source.location is SourceLocation.LOCAL
+                else "gitlab_source_details_remote"
+            )
             source_specific = t(
                 user.language_code,
-                "gitlab_source_details",
+                detail_key,
                 location=t(user.language_code, location_key),
                 container=code(profile.gitlab_source.container_name),
-                backup_path=code(profile.gitlab_source.backup_path),
+                backup_path=code(profile.gitlab_source.backup_path or ""),
             )
         source_details = t(
             user.language_code,

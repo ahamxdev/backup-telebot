@@ -53,7 +53,7 @@ def remote_server(*, enabled: bool = True) -> RemoteServer:
 
 
 def confirmation_data(server_id: int | None) -> dict[str, Any]:
-    return {
+    data = {
         "name": "Remote GitLab",
         "description": "nightly source",
         "source_type": SourceType.GITLAB,
@@ -62,14 +62,14 @@ def confirmation_data(server_id: int | None) -> dict[str, Any]:
         ),
         "gitlab_remote_server_id": server_id,
         "gitlab_container": "gitlab-primary",
-        "gitlab_backup_path": (
-            "/opt/gitlab/data/backups" if server_id is not None else "/gitlab-backups"
-        ),
         "schedule": ScheduleConfig(ScheduleKind.MANUAL),
         "compression": CompressionConfig(CompressionFormat.GZIP),
         "encryption": EncryptionConfig(EncryptionMode.NONE),
         "selected": set(),
     }
+    if server_id is not None:
+        data["gitlab_backup_path"] = "/opt/gitlab/data/backups"
+    return data
 
 
 async def test_remote_gitlab_confirm_creates_profile_once(database, settings: Settings) -> None:
@@ -179,31 +179,22 @@ async def test_local_gitlab_confirm_still_works(database, settings: Settings) ->
         assert profile.gitlab_source is not None
         assert profile.gitlab_source.location is SourceLocation.LOCAL
         assert profile.gitlab_source.remote_server_id is None
+        assert profile.gitlab_source.backup_path is None
 
-
-async def test_local_gitlab_legacy_worker_path_step_uses_fixed_helper_path(
-    database, settings: Settings
-) -> None:
-    configured_settings = configured(settings)
-    client = FakeClient()
-    dispatcher = TelegramDispatcher(
-        database.session_factory, TelegramTransport(client), configured_settings
-    )
-    async with database.session_factory() as session:
-        actor, _ = await BootstrapService(session).bootstrap_superadmin(1001)
-        create = await dispatcher.fsm.set(
-            actor.id,
-            State.ADD_BACKUP_GITLAB_WORKER_PATH,
+        await dispatcher._begin_backup_reconfigure(session, actor, profile.id)
+        draft = await dispatcher.fsm.get(actor.id)
+        assert draft is not None
+        assert "existing_gitlab_backup_path" not in draft.data
+        draft.data.update(
             {
+                "source_type": SourceType.GITLAB,
                 "gitlab_location": SourceLocation.LOCAL,
-                "gitlab_container": "gitlab",
-            },
+            }
         )
-
-        await dispatcher._flow(session, actor, "/unmounted/ignored", None, create)
-
-        assert create.state is State.ADD_BACKUP_SCHEDULE
-        assert create.data["gitlab_backup_path"] == "/gitlab-backups"
+        edit = await dispatcher.fsm.set(actor.id, State.ADD_BACKUP_GITLAB_CONTAINER, draft.data)
+        await dispatcher._flow(session, actor, "-", None, edit)
+        assert edit.state is State.ADD_BACKUP_SCHEDULE
+        assert "gitlab_backup_path" not in edit.data
 
 
 async def test_local_gitlab_skips_worker_path_prompt(database, settings: Settings) -> None:
@@ -223,8 +214,12 @@ async def test_local_gitlab_skips_worker_path_prompt(database, settings: Setting
         await dispatcher._flow(session, actor, "gitlab", None, item)
 
         assert item.state is State.ADD_BACKUP_SCHEDULE
-        assert item.data["gitlab_backup_path"] == "/gitlab-backups"
-        assert all("worker-writable" not in message for message in client.messages)
+        assert "gitlab_backup_path" not in item.data
+        rendered = "\n".join(client.messages)
+        assert "GitLab Backup Directory" not in rendered
+        assert "worker-visible" not in rendered
+        assert "Write Access Required" not in rendered
+        assert "/host/gitlab-backups" not in rendered
 
 
 def test_gitlab_wizard_prompts_use_compact_html_style() -> None:

@@ -352,7 +352,10 @@ STRINGS: dict[str, str] = {
         "تأیید اندازه و SHA-256 نسخه مرحله‌بندی‌شده حذف می‌کند.\nبرای بازیابی کامل، "
         "<code>gitlab.rb</code> و <code>gitlab-secrets.json</code> را جداگانه بکاپ بگیرید."
     ),
-    "gitlab_source_details": (
+    "gitlab_source_details_local": (
+        "\n🦊 <b>منبع گیت‌لب</b>\n📍 <b>مکان:</b> {location}\n<b>کانتینر:</b> {container}"
+    ),
+    "gitlab_source_details_remote": (
         "\n🦊 <b>منبع گیت‌لب</b>\n📍 <b>مکان:</b> {location}"
         "\n<b>کانتینر:</b> {container}\n<b>مسیر پشتیبان:</b> {backup_path}"
     ),

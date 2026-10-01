@@ -1,8 +1,7 @@
 import json
-import os
 import re
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
@@ -190,36 +189,6 @@ class LocalSourcePathMapper:
                 if not any(self._contains(root, denied_root) for denied_root in denied)
             )
         )
-
-    def validate_writable_container_directory(self, value: str) -> str:
-        """Validate a cleanup-capable directory in the worker mount namespace."""
-        clean = self.validate_container_path(value)
-        path = Path(clean)
-        try:
-            resolved = path.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            raise LocalSourcePathError(
-                "not_found", "directory does not exist inside the backup worker"
-            ) from error
-        if resolved != path:
-            raise LocalSourcePathError(
-                "symlink_escape", "unsafe or symbolic-link path is not allowed"
-            )
-        try:
-            self.validate_container_path(str(resolved))
-        except LocalSourcePathError as error:
-            raise LocalSourcePathError(
-                "symlink_escape", "unsafe or symbolic-link path is not allowed"
-            ) from error
-        if not path.is_dir():
-            raise LocalSourcePathError(
-                "not_directory", "path is not a directory inside the backup worker"
-            )
-        if not os.access(path, os.W_OK | os.X_OK):
-            raise LocalSourcePathError(
-                "not_writable", "directory is not writable inside the backup worker"
-            )
-        return clean
 
 
 def validate_approved_local_path(
@@ -472,18 +441,26 @@ class FilesConfig:
 class GitLabConfig:
     location: SourceLocation
     container_name: str
-    backup_path: str
+    backup_path: str | None = None
     remote_server_id: int | None = None
 
     def validate(self) -> "GitLabConfig":
         validate_docker_container_name(self.container_name)
-        path = validate_absolute_path(self.backup_path)
-        if path == "/":
-            raise ValueError("GitLab backup root cannot be filesystem root")
-        if self.location is SourceLocation.REMOTE_SERVER and self.remote_server_id is None:
-            raise ValueError("remote GitLab sources require a remote server")
-        if self.location is SourceLocation.LOCAL and self.remote_server_id is not None:
-            raise ValueError("local GitLab sources cannot reference a remote server")
+        if self.location is SourceLocation.REMOTE_SERVER:
+            if self.remote_server_id is None:
+                raise ValueError("remote GitLab sources require a remote server")
+            if self.backup_path is None:
+                raise ValueError("remote GitLab sources require a backup path")
+            path = validate_absolute_path(self.backup_path)
+            if path == "/":
+                raise ValueError("GitLab backup root cannot be filesystem root")
+        elif self.location is SourceLocation.LOCAL:
+            if self.remote_server_id is not None:
+                raise ValueError("local GitLab sources cannot reference a remote server")
+            if self.backup_path is not None:
+                raise ValueError("local GitLab sources cannot define a backup path")
+        else:
+            raise ValueError("invalid GitLab source location")
         return self
 
 
