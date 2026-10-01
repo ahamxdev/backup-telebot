@@ -500,6 +500,8 @@ class WizardMixin(LanguageHelpMixin):
                         prompt = "ask_schedule_weekly"
                     elif schedule_kind is ScheduleKind.MONTHLY:
                         prompt = "ask_schedule_monthly"
+                    elif schedule_kind is ScheduleKind.CRON:
+                        prompt = "ask_schedule_cron"
                     await self._send(user, prompt, buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_SCHEDULE_VALUE:
                 item.data["schedule"] = self._schedule_value(item.data["schedule_kind"], text)
@@ -931,6 +933,7 @@ class WizardMixin(LanguageHelpMixin):
                 ScheduleKind.DAILY: "ask_schedule_daily",
                 ScheduleKind.WEEKLY: "ask_schedule_weekly",
                 ScheduleKind.MONTHLY: "ask_schedule_monthly",
+                ScheduleKind.CRON: "ask_schedule_cron",
             }
             schedule_kind = item.data.get("schedule_kind")
             prompt = (
@@ -1485,6 +1488,8 @@ class WizardMixin(LanguageHelpMixin):
             if not text.isascii() or not text.isdecimal():
                 raise ValueError("invalid interval")
             return ScheduleConfig(kind, interval=int(text)).validate()
+        if kind is ScheduleKind.CRON:
+            return ScheduleConfig(kind, cron_expression=" ".join(text.split())).validate()
         parts = text.split()
         if kind is ScheduleKind.DAILY:
             return ScheduleConfig(kind, time=text).validate()

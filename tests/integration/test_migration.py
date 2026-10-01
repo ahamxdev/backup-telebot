@@ -77,7 +77,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         } <= run_columns
         run_indexes = {row[1] for row in connection.execute("PRAGMA index_list(backup_runs)")}
         assert "ix_backup_runs_failed_artifact_cleanup_at" in run_indexes
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
         gitlab_columns = {row[1] for row in connection.execute("PRAGMA table_info(gitlab_sources)")}
         assert "backup_path" in gitlab_columns
         assert "host_backup_path" not in gitlab_columns
@@ -86,7 +86,7 @@ def test_alembic_upgrade(tmp_path: Path) -> None:
         profile_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(backup_profiles)")
         }
-        assert {"archive_format", "compression_algorithm"} <= profile_columns
+        assert {"archive_format", "compression_algorithm", "schedule_cron"} <= profile_columns
         schema = "\n".join(
             row[0]
             for row in connection.execute(
@@ -191,7 +191,7 @@ def test_previous_head_upgrades_to_runtime_health_without_data_loss(tmp_path: Pa
         assert connection.execute("SELECT event_type FROM audit_events").fetchone() == (
             "preserved",
         )
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_heartbeats'"
         ).fetchone() == ("runtime_heartbeats",)
@@ -255,7 +255,7 @@ def test_historical_0017_gitlab_schema_is_reconciled_without_data_loss(tmp_path:
             "SELECT location, remote_server_id, container_name, backup_path "
             "FROM gitlab_sources WHERE profile_id = 1"
         ).fetchone() == ("LOCAL", None, "gitlab", "/worker/gitlab/backups")
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0020",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0021",)
 
 
 def test_disposable_0006_database_upgrades_to_0011_without_data_loss(tmp_path: Path) -> None:

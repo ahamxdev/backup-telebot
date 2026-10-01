@@ -89,7 +89,9 @@ Docker socket, or `gitlab-helper`.
 
 Every profile stores a closed, validated schedule, compression format/preset, encryption mode,
 and assigned admins. User-visible schedule times use the configurable IANA Backup Timezone;
-database timestamps remain UTC. Compression resource limits live in global system settings.
+database timestamps remain UTC. Alongside the interval, daily, weekly, and monthly options,
+five-field Linux cron expressions are supported (for example, `15 * * * *` runs hourly at
+minute 15). Compression resource limits live in global system settings.
 Age recipient keys, database passwords, and Age passphrases never appear in summaries or
 audit details.
 

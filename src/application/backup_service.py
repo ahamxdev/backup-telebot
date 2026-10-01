@@ -235,6 +235,7 @@ class BackupService:
         profile.schedule_time = schedule.time
         profile.schedule_weekday = schedule.weekday
         profile.schedule_monthday = schedule.monthday
+        profile.schedule_cron = schedule.normalized_cron_expression
         profile.next_scheduled_at = utc_now() if schedule.kind is not ScheduleKind.MANUAL else None
         profile.compression_format = compression.format
         profile.archive_format = compression.archive_format
@@ -473,6 +474,7 @@ class BackupService:
         profile.schedule_time = schedule.time
         profile.schedule_weekday = schedule.weekday
         profile.schedule_monthday = schedule.monthday
+        profile.schedule_cron = schedule.normalized_cron_expression
         if schedule.kind is ScheduleKind.MANUAL:
             profile.next_scheduled_at = None
         elif schedule.kind is ScheduleKind.ONCE:

@@ -204,6 +204,7 @@ class BackupProfilesMixin(RemoteServersMixin):
                             time=profile.schedule_time,
                             weekday=profile.schedule_weekday,
                             monthday=profile.schedule_monthday,
+                            cron_expression=profile.schedule_cron,
                         ),
                     ),
                     next_run=(

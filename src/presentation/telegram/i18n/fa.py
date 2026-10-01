@@ -245,9 +245,11 @@ STRINGS: dict[str, str] = {
     "schedule_daily_value": "روزانه ساعت {value}",
     "schedule_weekly_value": "هفتگی، روز {day} ساعت {time}",
     "schedule_monthly_value": "ماهانه، روز {day} ساعت {time}",
+    "schedule_cron_value": "کرون: {value}",
     "schedule_daily": "روزانه",
     "schedule_weekly": "هفتگی",
     "schedule_monthly": "ماهانه",
+    "schedule_cron": "زمان‌بندی کرون",
     "compression_none": "◻️ بدون فشرده‌سازی",
     "archive_tar": "📦 TAR ✓",
     "archive_zip": "📦 ZIP",
@@ -370,6 +372,12 @@ STRINGS: dict[str, str] = {
     ),
     "ask_schedule_monthly": section(
         "📅", "زمان‌بندی ماهانه", "روز و زمان را به‌شکل <code>1 HH:MM</code> وارد کنید (روز ۱ تا ۲۸)."
+    ),
+    "ask_schedule_cron": section(
+        "⚙️",
+        "زمان‌بندی کرون",
+        "یک عبارت پنج‌بخشی کرون لینوکس وارد کنید: دقیقه، ساعت، روز ماه، ماه و روز هفته. "
+        "نمونه: <code>15 * * * *</code> هر ساعت در دقیقه ۱۵ اجرا می‌شود.",
     ),
     "choose_remote_server": "🌐 <b>سرور ریموت</b>\nسرور میزبان این منبع را انتخاب کنید.",
     "choose_assigned_admins": section(

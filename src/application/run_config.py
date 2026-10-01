@@ -87,6 +87,7 @@ def serialize_run_config(profile: BackupProfile, admin_ids: set[int] | None = No
             "schedule_time": profile.schedule_time,
             "schedule_weekday": profile.schedule_weekday,
             "schedule_monthday": profile.schedule_monthday,
+            "schedule_cron": profile.schedule_cron,
             "next_scheduled_at": (
                 profile.next_scheduled_at.isoformat()
                 if profile.next_scheduled_at is not None
@@ -188,6 +189,7 @@ def restore_run_config(snapshot: str) -> BackupProfile:
         schedule_time=data["schedule_time"],
         schedule_weekday=data["schedule_weekday"],
         schedule_monthday=data["schedule_monthday"],
+        schedule_cron=data.get("schedule_cron"),
         next_scheduled_at=(
             datetime.fromisoformat(data["next_scheduled_at"])
             if data["next_scheduled_at"] is not None

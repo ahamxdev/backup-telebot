@@ -56,6 +56,7 @@ SCHEDULE_ACTIONS = {
     "schedule_daily": ScheduleKind.DAILY,
     "schedule_weekly": ScheduleKind.WEEKLY,
     "schedule_monthly": ScheduleKind.MONTHLY,
+    "schedule_cron": ScheduleKind.CRON,
 }
 COMPRESSION_ACTIONS = {
     "compression_none": CompressionFormat.NONE,

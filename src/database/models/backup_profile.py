@@ -60,8 +60,12 @@ class BackupProfile(TimestampMixin, Base):
         ),
         CheckConstraint(
             "schedule_kind IN ('MANUAL', 'ONCE', 'EVERY_N_MINUTES', 'EVERY_N_HOURS', "
-            "'EVERY_N_DAYS', 'DAILY', 'WEEKLY', 'MONTHLY')",
+            "'EVERY_N_DAYS', 'DAILY', 'WEEKLY', 'MONTHLY', 'CRON')",
             name="ck_backup_profiles_schedule_kind",
+        ),
+        CheckConstraint(
+            "schedule_cron IS NULL OR length(schedule_cron) BETWEEN 1 AND 200",
+            name="ck_backup_profiles_schedule_cron",
         ),
         CheckConstraint(
             "(schedule_kind != 'EVERY_N_MINUTES' OR schedule_interval <= 10080) AND "
@@ -81,19 +85,22 @@ class BackupProfile(TimestampMixin, Base):
         ),
         CheckConstraint(
             "(schedule_kind IN ('MANUAL', 'ONCE') AND schedule_interval IS NULL AND "
-            "schedule_time IS NULL AND schedule_weekday IS NULL AND schedule_monthday IS NULL) OR "
+            "schedule_time IS NULL AND schedule_weekday IS NULL AND schedule_monthday IS NULL AND "
+            "schedule_cron IS NULL) OR "
             "(schedule_kind IN ('EVERY_N_MINUTES', 'EVERY_N_HOURS', 'EVERY_N_DAYS') AND "
             "schedule_interval IS NOT NULL AND schedule_time IS NULL AND "
-            "schedule_weekday IS NULL AND schedule_monthday IS NULL) OR "
+            "schedule_weekday IS NULL AND schedule_monthday IS NULL AND schedule_cron IS NULL) OR "
             "(schedule_kind = 'DAILY' AND schedule_interval IS NULL AND "
             "schedule_time IS NOT NULL AND schedule_weekday IS NULL AND "
-            "schedule_monthday IS NULL) OR "
+            "schedule_monthday IS NULL AND schedule_cron IS NULL) OR "
             "(schedule_kind = 'WEEKLY' AND schedule_interval IS NULL AND "
             "schedule_time IS NOT NULL AND schedule_weekday IS NOT NULL AND "
-            "schedule_monthday IS NULL) OR "
+            "schedule_monthday IS NULL AND schedule_cron IS NULL) OR "
             "(schedule_kind = 'MONTHLY' AND schedule_interval IS NULL AND "
             "schedule_time IS NOT NULL AND schedule_weekday IS NULL AND "
-            "schedule_monthday IS NOT NULL)",
+            "schedule_monthday IS NOT NULL AND schedule_cron IS NULL) OR "
+            "(schedule_kind = 'CRON' AND schedule_interval IS NULL AND schedule_time IS NULL AND "
+            "schedule_weekday IS NULL AND schedule_monthday IS NULL AND schedule_cron IS NOT NULL)",
             name="ck_backup_profiles_schedule_shape",
         ),
         CheckConstraint(
@@ -152,6 +159,7 @@ class BackupProfile(TimestampMixin, Base):
     schedule_time: Mapped[str | None] = mapped_column(String(5))
     schedule_weekday: Mapped[int | None] = mapped_column(Integer)
     schedule_monthday: Mapped[int | None] = mapped_column(Integer)
+    schedule_cron: Mapped[str | None] = mapped_column(String(200))
     next_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     compression_format: Mapped[CompressionFormat] = mapped_column(
         Enum(CompressionFormat, native_enum=False), default=CompressionFormat.ZSTANDARD

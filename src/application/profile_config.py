@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from croniter import croniter
+
 from domain.enums import (
     ArchiveFormat,
     CompressionAlgorithm,
@@ -251,6 +253,7 @@ class ScheduleConfig:
     time: str | None = None
     weekday: int | None = None
     monthday: int | None = None
+    cron_expression: str | None = None
 
     def validate(self) -> "ScheduleConfig":
         interval_kinds = {
@@ -282,7 +285,23 @@ class ScheduleConfig:
             raise ValueError("monthly schedules require exactly one day")
         if self.monthday is not None and not 1 <= self.monthday <= 28:
             raise ValueError("month day must be between 1 and 28")
+        if self.kind is ScheduleKind.CRON:
+            if self.cron_expression is None:
+                raise ValueError("cron schedules require an expression")
+            expression = " ".join(self.cron_expression.split())
+            if len(expression) > 200 or len(expression.split()) != 5:
+                raise ValueError("cron expression must contain exactly five fields")
+            if not croniter.is_valid(expression):
+                raise ValueError("invalid cron expression")
+        elif self.cron_expression is not None:
+            raise ValueError("cron expression is not valid for this schedule")
         return self
+
+    @property
+    def normalized_cron_expression(self) -> str | None:
+        if self.cron_expression is None:
+            return None
+        return " ".join(self.cron_expression.split())
 
 
 @dataclass(frozen=True)

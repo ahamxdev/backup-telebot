@@ -238,6 +238,8 @@ class TelegramStateMixin:
                 day=schedule.monthday,
                 time=schedule.time,
             )
+        if schedule.kind is ScheduleKind.CRON:
+            return t(language, "schedule_cron_value", value=schedule.cron_expression)
         return t(language, "schedule_manual")
 
     @staticmethod

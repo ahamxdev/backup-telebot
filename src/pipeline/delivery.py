@@ -85,6 +85,9 @@ def _schedule_caption(profile: BackupProfile, language: LanguageCode | str) -> T
             day=profile.schedule_monthday,
             time=profile.schedule_time,
         ),
+        ScheduleKind.CRON: t(
+            language, "schedule_cron_value", value=profile.schedule_cron
+        ),
     }
     return labels[profile.schedule_kind]
 

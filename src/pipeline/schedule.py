@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from croniter import croniter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +35,11 @@ def next_scheduled_time(profile: BackupProfile, after: datetime, timezone: str) 
             ScheduleKind.EVERY_N_DAYS: timedelta(days=1),
         }[profile.schedule_kind]
         return after_utc + unit * profile.schedule_interval
+    if profile.schedule_kind is ScheduleKind.CRON:
+        if profile.schedule_cron is None:
+            raise ValueError("cron schedule is incomplete")
+        local = after_utc.astimezone(ZoneInfo(timezone))
+        return croniter(profile.schedule_cron, local).get_next(datetime).astimezone(UTC)
     if profile.schedule_time is None:
         raise ValueError("calendar schedule is incomplete")
     hour, minute = (int(value) for value in profile.schedule_time.split(":"))

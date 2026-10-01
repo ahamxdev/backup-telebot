@@ -39,12 +39,19 @@ def test_authenticated_secret_encryption_and_redaction() -> None:
 def test_schedule_and_compression_closed_validation() -> None:
     ScheduleConfig(ScheduleKind.WEEKLY, time="04:30", weekday=2).validate()
     ScheduleConfig(ScheduleKind.MONTHLY, time="04:30", monthday=28).validate()
+    ScheduleConfig(ScheduleKind.CRON, cron_expression="15 * * * *").validate()
     with pytest.raises(ValueError):
         ScheduleConfig(ScheduleKind.EVERY_N_MINUTES, interval=0).validate()
     with pytest.raises(ValueError):
         ScheduleConfig(ScheduleKind.MONTHLY, time="04:30", monthday=29).validate()
     with pytest.raises(ValueError):
         ScheduleConfig(ScheduleKind.MANUAL, time="04:30").validate()
+    with pytest.raises(ValueError):
+        ScheduleConfig(ScheduleKind.CRON, cron_expression="15 * * *").validate()
+    with pytest.raises(ValueError):
+        ScheduleConfig(ScheduleKind.CRON, cron_expression="61 * * * *").validate()
+    with pytest.raises(ValueError):
+        ScheduleConfig(ScheduleKind.DAILY, time="04:30", cron_expression="15 * * * *").validate()
     CompressionConfig(CompressionFormat.ZSTANDARD, CompressionPreset.BALANCED).validate()
     with pytest.raises(ValueError):
         CompressionConfig(CompressionFormat.NONE, CompressionPreset.FAST).validate()

@@ -104,6 +104,11 @@ def test_schedule_timezone_and_all_kinds() -> None:
     monthly = profile("monthly", owner, ScheduleKind.MONTHLY)
     monthly.schedule_time, monthly.schedule_monthday = "10:30", 20
     assert next_scheduled_time(monthly, after, "Asia/Tehran") > after
+    cron = profile("cron", owner, ScheduleKind.CRON)
+    cron.schedule_cron = "15 * * * *"
+    assert next_scheduled_time(cron, after, "Asia/Tehran") == datetime(
+        2026, 9, 11, 5, 45, tzinfo=UTC
+    )
     once = profile("once", owner, ScheduleKind.ONCE)
     assert next_scheduled_time(once, after, "Asia/Tehran") is None
 

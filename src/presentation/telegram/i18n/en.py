@@ -255,9 +255,11 @@ STRINGS: dict[str, str] = {
     "schedule_daily_value": "Daily at {value}",
     "schedule_weekly_value": "Weekly on day {day} at {time}",
     "schedule_monthly_value": "Monthly on day {day} at {time}",
+    "schedule_cron_value": "Cron: {value}",
     "schedule_daily": "Daily",
     "schedule_weekly": "Weekly",
     "schedule_monthly": "Monthly",
+    "schedule_cron": "Cron Schedule",
     "compression_none": "◻️ None",
     "archive_tar": "📦 TAR ✓",
     "archive_zip": "📦 ZIP",
@@ -392,6 +394,12 @@ STRINGS: dict[str, str] = {
     ),
     "ask_schedule_monthly": section(
         "📅", "Monthly Schedule", "Enter day and time as <code>1 HH:MM</code> (day 1–28)."
+    ),
+    "ask_schedule_cron": section(
+        "⚙️",
+        "Cron Schedule",
+        "Enter a five-field Linux cron expression: minute, hour, day of month, month, and "
+        "weekday. Example: <code>15 * * * *</code> runs hourly at minute 15.",
     ),
     "choose_remote_server": "🌐 <b>Remote Server</b>\nChoose the server hosting this source.",
     "choose_assigned_admins": section(

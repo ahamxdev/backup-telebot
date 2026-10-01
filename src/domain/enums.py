@@ -54,6 +54,7 @@ class ScheduleKind(StrEnum):
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
+    CRON = "CRON"
 
 
 class CompressionFormat(StrEnum):
