@@ -2,12 +2,15 @@ import asyncio
 import socket
 import uuid
 
+import structlog
+
 from application.health_service import (
     touch_heartbeats,
     validate_configured_tools,
     validate_runtime_schema,
 )
 from application.run_config import snapshot_legacy_active_runs
+from application.worker_paths import publish_worker_paths
 from config.settings import Settings
 from database.models import SystemSettings, utc_now
 from database.session import Database
@@ -89,6 +92,10 @@ async def run_worker(settings: Settings) -> None:
                     )
                     await touch_heartbeats(session, heartbeat_components)
                 if heartbeat_due:
+                    try:
+                        await asyncio.to_thread(publish_worker_paths, settings)
+                    except OSError:
+                        structlog.get_logger().warning("worker_source_paths_report_unavailable")
                     next_runtime_heartbeat = (
                         monotonic_now + settings.HEALTH_HEARTBEAT_INTERVAL_SECONDS
                     )

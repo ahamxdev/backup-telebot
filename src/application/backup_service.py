@@ -224,7 +224,9 @@ class BackupService:
         profile.schedule_weekday = schedule.weekday
         profile.schedule_monthday = schedule.monthday
         profile.schedule_cron = schedule.normalized_cron_expression
-        profile.next_scheduled_at = utc_now() if schedule.kind is not ScheduleKind.MANUAL else None
+        profile.next_scheduled_at = (
+            None if schedule.kind in {ScheduleKind.MANUAL, ScheduleKind.CRON} else utc_now()
+        )
         profile.compression_format = compression.format
         profile.archive_format = compression.archive_format
         profile.compression_algorithm = compression.algorithm
@@ -348,7 +350,9 @@ class BackupService:
             ):
                 profile.next_scheduled_at = None
             elif not was_enabled and profile.schedule_kind is not ScheduleKind.ONCE:
-                profile.next_scheduled_at = utc_now()
+                profile.next_scheduled_at = (
+                    None if profile.schedule_kind is ScheduleKind.CRON else utc_now()
+                )
         await self.audit.record(
             "backup_edited", actor_id=actor.id, target_type="backup", target_id=str(profile.id)
         )

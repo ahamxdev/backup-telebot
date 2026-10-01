@@ -210,6 +210,21 @@ def _open_local_root(path: Path) -> tuple[int, os.stat_result]:
         raise
 
 
+def local_source_available(raw: str, settings: Settings) -> bool:
+    """Verify prompt candidates using the same confinement and opens as acquisition."""
+    try:
+        path, initial = _validated_local_source(raw, settings)
+        descriptor, opened = _open_local_root(path)
+        try:
+            return _same_inode(initial, opened) and (
+                not stat.S_ISDIR(opened.st_mode) or os.access(path, os.X_OK)
+            )
+        finally:
+            os.close(descriptor)
+    except (OSError, PipelineError, ValueError):
+        return False
+
+
 def _verify_path_identity(path: Path, expected: os.stat_result) -> None:
     try:
         current = path.lstat()

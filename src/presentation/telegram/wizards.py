@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from collections.abc import Awaitable
 from datetime import UTC, datetime
@@ -15,12 +16,14 @@ from application.profile_config import (
     EncryptionConfig,
     FilesConfig,
     GitLabConfig,
+    LocalSourcePathMapper,
     ScheduleConfig,
     validate_docker_container_name,
 )
 from application.remote_server_service import RemoteServerService
 from application.settings_service import SettingsService
 from application.validation import validate_name
+from application.worker_paths import available_worker_paths
 from database.models import User
 from domain.enums import (
     CompressionAlgorithm,
@@ -73,6 +76,7 @@ from presentation.telegram.keyboards import (
     remote_servers_menu,
     reply,
     rows,
+    schedule_modes,
     schedule_types,
     source_types,
     tls_modes,
@@ -367,7 +371,7 @@ class WizardMixin(LanguageHelpMixin):
                 )
                 if item.data["location"] is SourceLocation.LOCAL:
                     await self.fsm.transition(user.id, state, State.ADD_BACKUP_FILES_PATHS)
-                    await self._send(user, "ask_paths", buttons=cancel_back(language))
+                    await self._path_prompt(user, item)
                 else:
                     servers = await RemoteServerRepository(session).list_active(enabled_only=True)
                     if not servers:
@@ -388,7 +392,7 @@ class WizardMixin(LanguageHelpMixin):
                 item.data["remote_server_name"] = server.name
                 item.option_ids.clear()
                 await self.fsm.transition(user.id, state, State.ADD_BACKUP_FILES_PATHS)
-                await self._send(user, "ask_paths", buttons=cancel_back(language))
+                await self._path_prompt(user, item)
             elif state is State.ADD_BACKUP_FILES_PATHS:
                 if (
                     text == "-"
@@ -472,8 +476,18 @@ class WizardMixin(LanguageHelpMixin):
                 ).validate()
                 await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_SCHEDULE:
+                if action == "schedule_interval_mode":
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_INTERVAL)
+                    await self._render_wizard_step(session, user, item)
+                elif action == "schedule_cron":
+                    item.data["schedule_kind"] = ScheduleKind.CRON
+                    await self.fsm.transition(user.id, state, State.ADD_BACKUP_SCHEDULE_VALUE)
+                    await self._render_wizard_step(session, user, item)
+                else:
+                    raise ValueError("invalid schedule mode")
+            elif state is State.ADD_BACKUP_INTERVAL:
                 schedule_kind = SCHEDULE_ACTIONS.get(action or "")
-                if schedule_kind is None:
+                if schedule_kind is None or schedule_kind is ScheduleKind.CRON:
                     raise ValueError("invalid schedule")
                 item.data["schedule_kind"] = schedule_kind
                 if schedule_kind in {ScheduleKind.MANUAL, ScheduleKind.ONCE}:
@@ -488,8 +502,6 @@ class WizardMixin(LanguageHelpMixin):
                         prompt = "ask_schedule_weekly"
                     elif schedule_kind is ScheduleKind.MONTHLY:
                         prompt = "ask_schedule_monthly"
-                    elif schedule_kind is ScheduleKind.CRON:
-                        prompt = "ask_schedule_cron"
                     await self._send(user, prompt, buttons=cancel_back(language))
             elif state is State.ADD_BACKUP_SCHEDULE_VALUE:
                 item.data["schedule"] = self._schedule_value(item.data["schedule_kind"], text)
@@ -718,7 +730,13 @@ class WizardMixin(LanguageHelpMixin):
             if await self.fsm.invalid(user.id):
                 await self._home(user, "too_many_invalid")
             else:
-                await self._send(user, "invalid")
+                await self._send(
+                    user,
+                    "invalid_cron"
+                    if state is State.ADD_BACKUP_SCHEDULE_VALUE
+                    and item.data.get("schedule_kind") is ScheduleKind.CRON
+                    else "invalid",
+                )
 
     async def _back(self, session: AsyncSession, user: User) -> None:
         current = await self.fsm.get(user.id)
@@ -908,7 +926,11 @@ class WizardMixin(LanguageHelpMixin):
             await self._access_keyboard(user, item, admin_direction=False)
         elif state is State.ADD_BACKUP_CONFIRM:
             await self._show_profile_summary(session, user, item)
+        elif state is State.ADD_BACKUP_FILES_PATHS:
+            await self._path_prompt(user, item)
         elif state is State.ADD_BACKUP_SCHEDULE:
+            await self._schedule_mode_prompt(session, user, item)
+        elif state is State.ADD_BACKUP_INTERVAL:
             settings = await SettingsService(session).get()
             await self._send(
                 user,
@@ -929,11 +951,18 @@ class WizardMixin(LanguageHelpMixin):
                 if isinstance(schedule_kind, ScheduleKind) and schedule_kind in prompts
                 else "ask_schedule_interval"
             )
-            await self._send(
-                user,
-                prompt,
-                buttons=cancel_back(language),
-            )
+            if schedule_kind is ScheduleKind.CRON:
+                stored = await SettingsService(session).get()
+                current = item.data.get("schedule") or item.data.get("existing_schedule")
+                await self._wizard_prompt(
+                    user,
+                    prompt,
+                    cancel_back(language),
+                    current=current.cron_expression if current is not None else None,
+                    timezone=stored.backup_timezone,
+                )
+            else:
+                await self._send(user, prompt, buttons=cancel_back(language))
         elif state in {
             State.ADD_BACKUP_FILES_SERVER,
             State.ADD_BACKUP_MSSQL_SERVER,
@@ -1051,13 +1080,65 @@ class WizardMixin(LanguageHelpMixin):
     async def _advance_to_schedule(
         self, session: AsyncSession, user: User, item: Conversation, state: State
     ) -> None:
-        settings = await SettingsService(session).get()
         await self.fsm.transition(user.id, state, State.ADD_BACKUP_SCHEDULE)
+        await self._schedule_mode_prompt(session, user, item)
+
+    async def _path_prompt(self, user: User, item: Conversation) -> None:
+        prompt = t(user.language_code, "ask_paths")
+        if item.data.get("location") is SourceLocation.LOCAL:
+            paths = await asyncio.to_thread(available_worker_paths, self.settings)
+            path_list = (
+                TelegramHtml("\n".join(code(path) for path in paths))
+                if paths
+                else t(user.language_code, "no_available_paths")
+            )
+            available = t(user.language_code, "available_paths", paths=path_list)
+            prompt = TelegramHtml(f"{prompt}\n\n{available}")
+        current = item.data.get("paths") or item.data.get("existing_files_paths")
+        if current and item.data.get("location") is SourceLocation.LOCAL:
+            mapper = LocalSourcePathMapper(
+                self.settings.allowed_source_roots(),
+                self.settings.denied_source_roots(),
+                self.settings.local_source_mounts(),
+            )
+            translated = []
+            for path in current:
+                try:
+                    translated.append(mapper.container_path(path))
+                except ValueError:
+                    continue
+            current = translated
+        if current:
+            prompt = TelegramHtml(
+                f"{prompt}\n\n{t(user.language_code, 'current_value')}\n"
+                f"{code(chr(10).join(current))}"
+            )
+        await self.transport.send_text(
+            user.telegram_user_id, prompt, buttons=cancel_back(user.language_code)
+        )
+
+    async def _schedule_mode_prompt(
+        self, session: AsyncSession, user: User, item: Conversation
+    ) -> None:
+        stored = await SettingsService(session).get()
+        current = item.data.get("schedule") or item.data.get("existing_schedule")
+        current_text = TelegramHtml("")
+        if current is not None:
+            mode = (
+                "schedule_cron" if current.kind is ScheduleKind.CRON else "schedule_interval_mode"
+            )
+            current_text = t(
+                user.language_code,
+                "current_schedule_mode",
+                mode=t(user.language_code, mode),
+                schedule=self._schedule_label(user.language_code, current),
+            )
         await self._send(
             user,
-            "choose_schedule",
-            timezone=settings.backup_timezone,
-            buttons=schedule_types(user.language_code),
+            "choose_schedule_mode",
+            timezone=stored.backup_timezone,
+            current=current_text,
+            buttons=schedule_modes(user.language_code),
         )
 
     async def _advance_mssql_server(

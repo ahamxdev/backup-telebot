@@ -214,8 +214,12 @@ class BackupProfilesMixin(RemoteServersMixin):
                     ),
                     next_run=(
                         TelegramHtml(
-                            f"\n⏭ <b>Next run:</b> "
-                            f"{format_user_timestamp(profile.next_scheduled_at, timezone)}"
+                            "\n"
+                            + t(
+                                language,
+                                "caption_next_run",
+                                value=format_user_timestamp(profile.next_scheduled_at, timezone),
+                            )
                         )
                         if profile.next_scheduled_at is not None
                         else TelegramHtml("")
@@ -272,6 +276,14 @@ class BackupProfilesMixin(RemoteServersMixin):
             "description": profile.description,
             "enabled": profile.enabled,
             "original_source_type": profile.source_type,
+            "existing_schedule": ScheduleConfig(
+                profile.schedule_kind,
+                interval=profile.schedule_interval,
+                time=profile.schedule_time,
+                weekday=profile.schedule_weekday,
+                monthday=profile.schedule_monthday,
+                cron_expression=profile.schedule_cron,
+            ),
             "original_encryption_mode": profile.encryption_mode,
             "existing_age_recipients": tuple(json.loads(profile.age_recipients or "[]")),
             "can_preserve_age_passphrase": profile.encrypted_age_passphrase is not None,

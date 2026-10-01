@@ -5,7 +5,6 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import RPCError
 
-from application.settings_service import SettingsService
 from database.models import User
 from domain.enums import (
     EncryptionMode,
@@ -17,11 +16,11 @@ from infrastructure.repositories import (
     UserRepository,
     touch_user,
 )
+from presentation.telegram.audit import audit_pages
 from presentation.telegram.constants import (
     SUPERADMIN_ACTIONS,
 )
-from presentation.telegram.datetime_format import format_user_datetime
-from presentation.telegram.formatting import TelegramHtml, code, escaped
+from presentation.telegram.formatting import TelegramHtml, code
 from presentation.telegram.i18n import action_for_text, t
 from presentation.telegram.keyboards import (
     cancel_back,
@@ -306,21 +305,8 @@ class RoutingMixin(WizardMixin):
             )
         elif action == "audit":
             events = await AuditRepository(session).recent()
-            timezone = (await SettingsService(session).get()).backup_timezone
-            timezone_heading = t(language, "timezone_heading")
-            body = "\n".join(
-                f"• {escaped(event.event_type)}\n"
-                f"{format_user_datetime(event.created_at, timezone, timezone_heading)}"
-                for event in events
-            )
-            await self.transport.send_text(
-                user.telegram_user_id,
-                (
-                    TelegramHtml(f"{t(language, 'audit_title')}\n━━━━━━━━━━━━━━\n{body}")
-                    if body
-                    else t(language, "audit_empty")
-                ),
-            )
+            for page in audit_pages(language, events):
+                await self.transport.send_text(user.telegram_user_id, page)
         elif action == "settings":
             await self._settings(session, user)
         elif action == "backup_timezone":

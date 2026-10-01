@@ -91,7 +91,31 @@ Every profile stores a closed, validated schedule, compression format/preset, en
 and assigned admins. User-visible schedule times use the configurable IANA Backup Timezone;
 database timestamps remain UTC. Alongside the interval, daily, weekly, and monthly options,
 five-field Linux cron expressions are supported (for example, `15 * * * *` runs hourly at
-minute 15). Compression resource limits live in global system settings.
+minute 15). Create and Edit both ask for **Schedule Type** after source configuration:
+choose **Interval Schedule** for the existing Manual Only, Once, Every N Minutes/Hours/Days,
+Daily, Weekly, and Monthly controls, or **Cron Schedule** for examples and a five-field expression.
+Edits show the current mode. Only one schedule is stored per profile; changing modes clears
+fields from the other mode. New and re-enabled cron profiles wait for the next occurrence,
+calculated by the existing scheduler in Backup Timezone and persisted in UTC. Standard cron
+ranges, lists, steps, and month/weekday names are supported; seconds and non-Linux extensions
+are rejected. Compression resource limits live in global system settings.
+
+Local file path prompts show approved worker-visible paths as tappable `<code>` entries.
+The worker checks approval, resolved confinement, existence, and read/traversal permissions,
+then atomically publishes `DATA_DIR/worker-source-paths.json` during its heartbeat loop.
+The bot intersects a fresh report with its current approval configuration, so its own mounts
+cannot advertise paths absent from the worker. Missing or stale reports show an empty-state
+message. Bot and worker must share `DATA_DIR`, as they do in Compose; host-side paths are
+translated before displaying current values. Input remains one absolute path per line and
+acquisition retains its existing security checks.
+
+Settings and System Health use live database queries, migration state, component heartbeats,
+and disk checks. They include profile/run counts, pending delivery size/count, retained
+artifacts, and runtime directories. Proxy and GitLab Helper display configuration/verification
+states without implying a health probe exists. Audit Log preserves the newest-20-event limit
+and shows localized event names, UTC timestamps, target/actor identifiers, and approved
+non-secret details in compact cards, split at entry boundaries for Telegram's message limit.
+All new prompts and cards are available in English and Persian.
 Age recipient keys, database passwords, and Age passphrases never appear in summaries or
 audit details.
 

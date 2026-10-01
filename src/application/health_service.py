@@ -9,6 +9,7 @@ from pathlib import Path
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -60,6 +61,13 @@ class OperationalHealth:
     retained_failed_artifacts: int
     tools: tuple[ToolHealth, ...]
     issues: tuple[str, ...]
+    used_disk_bytes: int = 0
+    storage_ready: bool = False
+    profile_count: int = 0
+    pending_delivery_count: int = 0
+    checked_at: datetime | None = None
+    helper_configured: bool = False
+    scheduled_profile_count: int = 0
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -215,9 +223,14 @@ async def collect_operational_health(
 ) -> OperationalHealth:
     checked_at = now or utc_now()
     await session.execute(text("SELECT 1"))
-    current_revision = str(
-        await session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1")) or "none"
-    )
+    try:
+        async with session.begin_nested():
+            current_revision = str(
+                await session.scalar(text("SELECT version_num FROM alembic_version LIMIT 1"))
+                or "none"
+            )
+    except SQLAlchemyError:
+        current_revision = "none"
     head_revision = migration_head()
     schema_current = current_revision == head_revision
     heartbeats = {item.component: item for item in await session.scalars(select(RuntimeHeartbeat))}
@@ -298,13 +311,16 @@ async def collect_operational_health(
         or 0
     )
     try:
-        free_disk = shutil.disk_usage(settings.PENDING_DELIVERY_ROOT).free
+        disk_usage = shutil.disk_usage(settings.PENDING_DELIVERY_ROOT)
+        free_disk = disk_usage.free
+        used_disk = disk_usage.used
         roots_writable = all(
             root.exists() and os.access(root, os.W_OK)
             for root in (settings.DATA_DIR, settings.WORK_ROOT, settings.PENDING_DELIVERY_ROOT)
         )
     except OSError:
         free_disk = 0
+        used_disk = 0
         roots_writable = False
     disk_ready = roots_writable and free_disk >= settings.MIN_FREE_DISK_BYTES
     tools = await configured_tool_health(session, settings)
@@ -360,4 +376,32 @@ async def collect_operational_health(
         retained_failed_artifacts=retained,
         tools=tools,
         issues=tuple(issues),
+        used_disk_bytes=used_disk,
+        storage_ready=disk_ready,
+        profile_count=int(
+            await session.scalar(
+                select(func.count(BackupProfile.id)).where(BackupProfile.archived_at.is_(None))
+            )
+            or 0
+        ),
+        pending_delivery_count=int(
+            await session.scalar(
+                select(func.count(BackupRun.id)).where(BackupRun.pending_directory.is_not(None))
+            )
+            or 0
+        ),
+        checked_at=checked_at,
+        scheduled_profile_count=scheduled_profiles,
+        helper_configured=bool(
+            await session.scalar(
+                select(BackupProfile.id)
+                .where(
+                    BackupProfile.archived_at.is_(None),
+                    BackupProfile.enabled.is_(True),
+                    BackupProfile.source_type == SourceType.GITLAB,
+                    BackupProfile.gitlab_source.has(location=SourceLocation.LOCAL),
+                )
+                .limit(1)
+            )
+        ),
     )

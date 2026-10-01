@@ -196,7 +196,7 @@ async def test_run_details_show_status_and_only_safe_error(database, settings) -
     await dispatcher.handle(Event(1001, data=token))
 
     message = client.messages[-1][1]
-    assert "✅ <b>Status:</b> Failed" in message
+    assert "📋 <b>Status:</b> 🔴 Failed" in message
     assert "⚙️ <b>Stage:</b> Complete" in message
     assert "▶️ <b>Trigger:</b> Manual" in message
     assert "DELIVERY_ACTION_REQUIRED" in message

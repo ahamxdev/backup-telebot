@@ -72,12 +72,12 @@ STRINGS: dict[str, str] = {
     "no_admins": section("👥", "No Admins", "No administrator accounts have been created yet."),
     "admin_card": (
         "👤 <b>Admin Details</b>\n━━━━━━━━━━━━━━\n📌 <b>Name:</b> <code>{name}</code>\n"
-        "🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n✅ <b>Status:</b> {status}\n"
+        "🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n📋 <b>Status:</b> {status}\n"
         "🌐 <b>Language:</b> {admin_language}\n━━━━━━━━━━━━━━\n"
         "📦 <b>Allowed Backups:</b> {backups}\n━━━━━━━━━━━━━━"
     ),
-    "enabled": "Enabled",
-    "disabled": "Disabled",
+    "enabled": "🟢 Enabled",
+    "disabled": "⚪ Disabled",
     "none": "None",
     "language_en": "English",
     "language_fa": "Persian",
@@ -128,13 +128,13 @@ STRINGS: dict[str, str] = {
         "📦 Original Backup Size: {original_size}\n🗜 Final Backup Size: {final_size}"
     ),
     "run_list_card": (
-        "🔎 <b>Run #<code>{run_id}</code></b> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
-        "✅ <b>Status:</b> {status}\n⚙️ <b>Stage:</b> {stage}\n🕒 <b>Created:</b> {created}"
+        "🔎 <b>Run #</b><code>{run_id}</code> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
+        "📋 <b>Status:</b> {status}\n⚙️ <b>Stage:</b> {stage}\n🕒 <b>Created:</b> {created}"
         "{size_summary}\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>Backup Run Details</b>\n━━━━━━━━━━━━━━\n🆔 <b>Run ID:</b> <code>{run_id}</code>\n"
-        "📌 <b>Profile:</b> <code>{profile}</code>\n✅ <b>Status:</b> {status}\n"
+        "📌 <b>Profile:</b> <code>{profile}</code>\n📋 <b>Status:</b> {status}\n"
         "⚙️ <b>Stage:</b> {stage}\n▶️ <b>Trigger:</b> {trigger}\n{source_details}\n"
         "━━━━━━━━━━━━━━\n"
         "🕒 <b>Created:</b> {created}\n📅 <b>Scheduled:</b> {scheduled}\n"
@@ -182,13 +182,13 @@ STRINGS: dict[str, str] = {
     ),
     "run_trigger_manual": "Manual",
     "run_trigger_scheduled": "Scheduled",
-    "run_status_queued": "Queued",
-    "run_status_running": "Running",
-    "run_status_delivery_pending": "Delivery pending",
-    "run_status_succeeded": "Succeeded",
-    "run_status_failed": "Failed",
-    "run_status_cancelled": "Cancelled",
-    "run_status_skipped": "Skipped",
+    "run_status_queued": "🟡 Queued",
+    "run_status_running": "🟡 Running",
+    "run_status_delivery_pending": "🟡 Delivery pending",
+    "run_status_succeeded": "🟢 Succeeded",
+    "run_status_failed": "🔴 Failed",
+    "run_status_cancelled": "⚪ Cancelled",
+    "run_status_skipped": "⚪ Skipped",
     "run_stage_queued": "Queued",
     "run_stage_backup": "Backup",
     "run_stage_verify_source": "Verifying source",
@@ -259,7 +259,7 @@ STRINGS: dict[str, str] = {
     "schedule_daily": "Daily",
     "schedule_weekly": "Weekly",
     "schedule_monthly": "Monthly",
-    "schedule_cron": "Cron Schedule",
+    "schedule_cron": ("📅 Cron Schedule"),
     "compression_none": "◻️ None",
     "archive_tar": "📦 TAR ✓",
     "archive_zip": "📦 ZIP",
@@ -332,7 +332,7 @@ STRINGS: dict[str, str] = {
         "🌐 <b>Address:</b> <code>{host}:{port}</code>\n👤 <b>User:</b> <code>{username}</code>\n"
         "🔐 <b>Authentication:</b> {authentication}\n"
         "🛡 <b>Fingerprint:</b> <code>{fingerprint}</code>\n"
-        "✅ <b>Status:</b> {status}\n━━━━━━━━━━━━━━"
+        "📋 <b>Status:</b> {status}\n━━━━━━━━━━━━━━"
     ),
     "ssh_private_key": "SSH private key",
     "choose_database_engine": section("🗄", "Database Engine", "Choose one database type."),
@@ -398,11 +398,13 @@ STRINGS: dict[str, str] = {
     "ask_schedule_monthly": section(
         "📅", "Monthly Schedule", "Enter day and time as <code>1 HH:MM</code> (day 1–28)."
     ),
-    "ask_schedule_cron": section(
-        "⚙️",
-        "Cron Schedule",
-        "Enter a five-field Linux cron expression: minute, hour, day of month, month, and "
-        "weekday. Example: <code>15 * * * *</code> runs hourly at minute 15.",
+    "ask_schedule_cron": (
+        "📅 <b>Cron Schedule</b>\nTimezone: <code>{timezone}</code>.\nUse 5-f"
+        "ield Linux cron in the configured backup timezone:\n<code>minute h"
+        "our day-of-month month day-of-week</code>\n\n<code>30 3 * * *</code"
+        "> → daily at 03:30\n<code>10 * * * *</code> → hourly at minute 10\n"
+        "<code>0 2 1 * *</code> → 1st of each month at 02:00\n\nSend your cr"
+        "on expression."
     ),
     "choose_remote_server": "🌐 <b>Remote Server</b>\nChoose the server hosting this source.",
     "choose_assigned_admins": section(
@@ -479,8 +481,8 @@ STRINGS: dict[str, str] = {
     "ask_backup_timezone": section(
         "🕓", "Backup Timezone", "Enter an IANA timezone, for example <code>Asia/Tehran</code>."
     ),
-    "status_draft": "Draft",
-    "status_archived": "Archived",
+    "status_draft": "🟡 Draft",
+    "status_archived": "⚪ Archived",
     "backup_created": section(
         "✅", "Backup Profile Saved", "Draft <code>{name}</code> was created."
     ),
@@ -545,7 +547,7 @@ STRINGS: dict[str, str] = {
     "permission_invalid": section("⛔", "Option Unavailable", "You cannot use this option here."),
     "caption_backup_completed": "📦 <b>Backup Completed</b>",
     "caption_profile": "📌 <b>Profile:</b> {value}",
-    "caption_status": "✅ <b>Status:</b> Completed",
+    "caption_status": "🟢 <b>Status:</b> Completed",
     "caption_started": "⏱ <b>Started:</b> {value}",
     "caption_completed": "🏁 <b>Completed:</b> {value}",
     "caption_schedule": "⏰ <b>Schedule:</b> {value}",
@@ -571,20 +573,127 @@ STRINGS: dict[str, str] = {
     "caption_final_size": "🗜 <b>Final Backup Size:</b> {value}",
     "caption_part": "📄 <b>Part {number}/{total}</b>",
     "settings_text": (
-        "⚙️ <b>Runtime Settings</b>\nConnection: MTProto Bot\nSOCKS5: {proxy}\n"
-        "Upload limit: <code>{limit:,}</code> bytes\nTimezone: <code>{timezone}</code>\n"
-        "SQLite support: enabled"
+        "⚙️ <b>Settings</b>\n\n<b>⚙️ Runtime</b>\nEnvironment: {environment} "
+        "· Version: {version}\nPython: {python}\n\n<b>🗄 Database</b>\n{backend"
+        "}: {database}\nSchema: {schema}\nMigration: {revision}\n\n<b>📡 Telegr"
+        "am</b>\nMTProto Bot / Worker: {telegram}\nUpload limit: {limit:,} b"
+        "ytes\n\n<b>🌐 Network</b>\nSOCKS5: {proxy} · {endpoint}\nConnection: {"
+        "proxy_status}\n\n<b>🕒 Time</b>\nBackup timezone: {timezone}\nUTC: {ut"
+        "c}\n\n<b>💾 Storage</b>\n{storage} · Free: {disk:,} MiB\nPending: {pen"
+        "ding_count} / {pending:,} MiB\n{directories}\n\n<b>🗂 Backups</b>\nPro"
+        "files: {profiles} · Active runs: {running}\nScheduler: {scheduler}"
+        "\nFailed: {failed} · Retained artifacts: {retained}\n\n<b>🔐 Security"
+        "</b>\nCredential encryption: {encryption}"
     ),
     "health_text": (
-        "🩺 <b>System Health</b>\nSystem: {status}\n{live} Live  {ready} Ready\n"
-        "{database} Control DB  {schema} Schema {revision}\n"
-        "{worker} Worker  {scheduler} Scheduler  {telegram} Telegram\n"
-        "Disk free: {disk:,} MB | Pending: {pending:,} MB\n"
-        "Runs Q/R/F: {queued}/{running}/{failed} | Stale leases: {stale}\n"
-        "Retained failed artifacts: {retained} | Tools: {tools}"
+        "🩺 <b>System Health</b>\nOverall: {status}\n\n{live} Application\n{dat"
+        "abase} Database ({backend})\n{schema} Schema / migrations\n{worker}"
+        " Worker\n{scheduler} Scheduler\n{telegram} Telegram Bot / Worker\n{p"
+        "roxy} Proxy\n{helper} GitLab Helper\n{storage} Storage\n\n<b>💾 Storag"
+        "e</b>\nFree / used: {disk:,} / {used:,} MiB\nPending: {pending_coun"
+        "t} / {pending:,} MiB\n\n<b>🗂 Operations</b>\nQueued / running / fail"
+        "ed: {queued} / {running} / {failed}\nStale leases: {stale} · Retai"
+        "ned artifacts: {retained}\nAvailable tools: {tools}\nMigration: {re"
+        "vision}\n\n<b>📂 Runtime directories</b>\n{directories}\n\n🕒 Checked: {"
+        "checked}"
     ),
     "active": "Active",
     "inactive": "Inactive",
     "yes": "Yes",
     "no": "No",
+    "schedule_interval_mode": ("🕒 Interval Schedule"),
+    "choose_schedule_mode": (
+        "⏱ <b>Schedule Type</b>\nChoose Interval or Cron. Timezone: <code>{"
+        "timezone}</code>.{current}"
+    ),
+    "current_schedule_mode": ("\n\n<b>Current mode:</b> {mode}\n{schedule}"),
+    "available_paths": ("📌 <b>Available paths</b>\n{paths}\nTap a path to copy it."),
+    "no_available_paths": ("No approved paths are currently verified as available by the worker."),
+    "invalid_cron": (
+        "⚠️ <b>Invalid Cron Expression</b>\nSend a valid 5-field Linux cron"
+        " expression, for example <code>30 3 * * *</code>."
+    ),
+    "health_healthy": ("🟢 Healthy"),
+    "health_warning": ("🟡 Warning"),
+    "health_error": ("🔴 Error"),
+    "health_disabled": ("⚪ Disabled / Not configured"),
+    "health_unverified": ("🟡 Not verified"),
+    "health_unavailable": (
+        "🔴 <b>Health Unavailable</b>\nThe database health check failed. Check the service logs."
+    ),
+    "audit_entry": ("{icon} <b>{name}</b>\n🕒 {timestamp}\n{details}"),
+    "audit_target": ("Target: {kind} <code>{target}</code>"),
+    "audit_actor": ("Actor: <code>{actor}</code>"),
+    "audit_detail": ("{label}: {value}"),
+    "audit_unknown": ("Event {event}"),
+    "audit_event_application_startup": ("Application Started"),
+    "audit_event_proxy_mode": ("Proxy Mode"),
+    "audit_event_telegram_connection_state": ("Telegram Connection"),
+    "audit_event_backup_timezone_changed": ("Backup Timezone Changed"),
+    "audit_event_backup_created": ("Backup Created"),
+    "audit_event_backup_edited": ("Backup Updated"),
+    "audit_event_backup_deleted": ("Backup Deleted"),
+    "audit_event_backup_enabled": ("Backup Enabled"),
+    "audit_event_backup_disabled": ("Backup Disabled"),
+    "audit_event_admin_created": ("Administrator Created"),
+    "audit_event_admin_edited": ("Administrator Updated"),
+    "audit_event_admin_deleted": ("Administrator Deleted"),
+    "audit_event_admin_enabled": ("Administrator Enabled"),
+    "audit_event_admin_disabled": ("Administrator Disabled"),
+    "audit_event_remote_server_created": ("Remote Server Created"),
+    "audit_event_remote_server_edited": ("Remote Server Updated"),
+    "audit_event_remote_server_deleted": ("Remote Server Deleted"),
+    "audit_event_remote_server_enabled": ("Remote Server Enabled"),
+    "audit_event_remote_server_disabled": ("Remote Server Disabled"),
+    "audit_event_backup_draft_created": ("Backup Draft Created"),
+    "audit_event_backup_profile_configured": ("Backup Configured"),
+    "audit_event_backup_profile_configuration_updated": ("Backup Configuration Updated"),
+    "audit_event_backup_access_granted": ("Backup Access Granted"),
+    "audit_event_backup_access_revoked": ("Backup Access Revoked"),
+    "audit_event_language_changed": ("Language Changed"),
+    "audit_event_superadmin_bootstrap": ("Superadmin Initialized"),
+    "audit_event_superadmin_restored": ("Superadmin Restored"),
+    "audit_event_remote_server_trusted": ("Remote Server Trusted"),
+    "audit_event_remote_server_retrusted": ("Remote Server Trust Updated"),
+    "audit_event_remote_server_connection_tested": ("Remote Connection Tested"),
+    "audit_event_backup_run_queued": ("Backup Run Queued"),
+    "audit_event_backup_run_claimed": ("Backup Run Claimed"),
+    "audit_event_backup_run_started": ("Backup Run Started"),
+    "audit_event_backup_run_completed": ("Backup Run Completed"),
+    "audit_event_backup_run_failed": ("Backup Run Failed"),
+    "audit_event_backup_run_cancelled": ("Backup Run Cancelled"),
+    "audit_event_backup_run_cancel_requested": ("Backup Run Cancellation Requested"),
+    "audit_event_backup_run_retry_requested": ("Backup Run Retry Requested"),
+    "audit_event_backup_run_recovered": ("Backup Run Recovered"),
+    "audit_event_backup_run_delivery_pending": ("Backup Run Delivery Pending"),
+    "audit_event_backup_run_delivery_retried": ("Backup Run Delivery Retried"),
+    "audit_event_backup_run_artifact_purged": ("Backup Run Artifact Purged"),
+    "audit_label_connected": ("Connected"),
+    "audit_label_proxy_enabled": ("Proxy"),
+    "audit_label_socks5_enabled": ("SOCKS5"),
+    "audit_label_mode": ("Mode"),
+    "audit_label_status": ("Status"),
+    "audit_label_stage": ("Stage"),
+    "audit_label_error_code": ("Error code"),
+    "audit_label_admin_id": ("Admin ID"),
+    "audit_label_timezone": ("Timezone"),
+    "audit_label_backup": ("Backup"),
+    "audit_label_backup_run": ("Run"),
+    "audit_label_admin": ("Admin"),
+    "audit_label_user": ("User"),
+    "audit_label_remote_server": ("Remote server"),
+    "audit_label_system_settings": ("Settings"),
+    "health_idle": "⚪ Idle (no scheduled profiles)",
+    "audit_label_backup_timezone": "Backup timezone",
+    "audit_label_source_type": "Source",
+    "audit_label_schedule": "Schedule",
+    "audit_label_compression": "Compression",
+    "audit_label_encryption": "Encryption",
+    "audit_label_assigned_admin_count": "Assigned admins",
+    "audit_label_enabled": "Enabled",
+    "audit_label_database_credentials_changed": "Database password changed",
+    "audit_label_age_unlock_changed": "Age passphrase changed",
+    "audit_event_backup_run_succeeded": "Backup Run Succeeded",
+    "audit_event_backup_run_retention_cleanup": "Retained Artifact Cleanup",
+    "audit_event_authorization_denied": "Authorization Denied",
 }

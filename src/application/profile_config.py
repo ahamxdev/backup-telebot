@@ -1,10 +1,11 @@
 import json
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from croniter import croniter
+from croniter import CroniterBadDateError, croniter
 
 from domain.enums import (
     ArchiveFormat,
@@ -260,8 +261,18 @@ class ScheduleConfig:
             expression = " ".join(self.cron_expression.split())
             if len(expression) > 200 or len(expression.split()) != 5:
                 raise ValueError("cron expression must contain exactly five fields")
-            if not croniter.is_valid(expression):
+            # Reject croniter extensions (seconds, L, #, ?, hashed/random fields).
+            standard = re.sub(
+                r"JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|SUN|MON|TUE|WED|THU|FRI|SAT",
+                "1",
+                expression.upper(),
+            )
+            if not re.fullmatch(r"[0-9*/ ,\-]+", standard) or not croniter.is_valid(expression):
                 raise ValueError("invalid cron expression")
+            try:
+                croniter(expression, datetime(2000, 1, 1, tzinfo=UTC)).get_next(datetime)
+            except CroniterBadDateError as exc:
+                raise ValueError("cron expression has no possible execution date") from exc
         elif self.cron_expression is not None:
             raise ValueError("cron expression is not valid for this schedule")
         return self

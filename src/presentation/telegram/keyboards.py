@@ -137,6 +137,10 @@ def yes_no(language: LanguageCode) -> list[list[Button]]:
     return rows(language, ("yes", "no"), ("back", "cancel"))
 
 
+def schedule_modes(language: LanguageCode) -> list[list[Button]]:
+    return rows(language, ("schedule_interval_mode",), ("schedule_cron",), ("back", "cancel"))
+
+
 def schedule_types(language: LanguageCode) -> list[list[Button]]:
     return rows(
         language,
@@ -144,7 +148,6 @@ def schedule_types(language: LanguageCode) -> list[list[Button]]:
         ("schedule_minutes", "schedule_hours"),
         ("schedule_days", "schedule_daily"),
         ("schedule_weekly", "schedule_monthly"),
-        ("schedule_cron",),
         ("back", "cancel"),
     )
 

@@ -74,12 +74,12 @@ STRINGS: dict[str, str] = {
     "no_admins": section("👥", "ادمینی وجود ندارد", "هنوز حساب ادمینی ساخته نشده است."),
     "admin_card": (
         "👤 <b>جزئیات ادمین</b>\n━━━━━━━━━━━━━━\n📌 <b>نام:</b> <code>{name}</code>\n"
-        "🆔 <b>شناسه تلگرام:</b> <code>{telegram_id}</code>\n✅ <b>وضعیت:</b> {status}\n"
+        "🆔 <b>شناسه تلگرام:</b> <code>{telegram_id}</code>\n📋 <b>وضعیت:</b> {status}\n"
         "🌐 <b>زبان:</b> {admin_language}\n━━━━━━━━━━━━━━\n"
         "📦 <b>بکاپ‌های مجاز:</b> {backups}\n━━━━━━━━━━━━━━"
     ),
-    "enabled": "فعال",
-    "disabled": "غیرفعال",
+    "enabled": "🟢 فعال",
+    "disabled": "⚪ غیرفعال",
     "none": "هیچ‌کدام",
     "language_en": "انگلیسی",
     "language_fa": "فارسی",
@@ -120,13 +120,13 @@ STRINGS: dict[str, str] = {
     "size_unknown": "نامشخص",
     "run_size_summary": "📦 اندازه اصلی بکاپ: {original_size}\n🗜 اندازه نهایی بکاپ: {final_size}",
     "run_list_card": (
-        "🔎 <b>اجرای شماره <code>{run_id}</code></b> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
-        "✅ <b>وضعیت:</b> {status}\n⚙️ <b>مرحله:</b> {stage}\n🕒 <b>ایجاد:</b> {created}"
+        "🔎 <b>اجرای شماره</b> <code>{run_id}</code> · <code>{profile}</code>\n━━━━━━━━━━━━━━\n"
+        "📋 <b>وضعیت:</b> {status}\n⚙️ <b>مرحله:</b> {stage}\n🕒 <b>ایجاد:</b> {created}"
         "{size_summary}\n━━━━━━━━━━━━━━"
     ),
     "run_detail_card": (
         "🔎 <b>جزئیات اجرای بکاپ</b>\n━━━━━━━━━━━━━━\n🆔 <b>شناسه اجرا:</b> <code>{run_id}</code>\n"
-        "📌 <b>پروفایل:</b> <code>{profile}</code>\n✅ <b>وضعیت:</b> {status}\n"
+        "📌 <b>پروفایل:</b> <code>{profile}</code>\n📋 <b>وضعیت:</b> {status}\n"
         "⚙️ <b>مرحله:</b> {stage}\n▶️ <b>نوع اجرا:</b> {trigger}\n{source_details}\n"
         "━━━━━━━━━━━━━━\n"
         "🕒 <b>ایجاد:</b> {created}\n📅 <b>زمان‌بندی:</b> {scheduled}\n"
@@ -168,13 +168,13 @@ STRINGS: dict[str, str] = {
     "run_error_generic": "اجرا ناموفق بود؛ جزئیات فقط در گزارش‌های محافظت‌شده موجود است.",
     "run_trigger_manual": "دستی",
     "run_trigger_scheduled": "زمان‌بندی‌شده",
-    "run_status_queued": "در صف",
-    "run_status_running": "در حال اجرا",
-    "run_status_delivery_pending": "در انتظار تحویل",
-    "run_status_succeeded": "موفق",
-    "run_status_failed": "ناموفق",
-    "run_status_cancelled": "لغوشده",
-    "run_status_skipped": "ردشده",
+    "run_status_queued": "🟡 در صف",
+    "run_status_running": "🟡 در حال اجرا",
+    "run_status_delivery_pending": "🟡 در انتظار تحویل",
+    "run_status_succeeded": "🟢 موفق",
+    "run_status_failed": "🔴 ناموفق",
+    "run_status_cancelled": "⚪ لغوشده",
+    "run_status_skipped": "⚪ ردشده",
     "run_stage_queued": "در صف",
     "run_stage_backup": "تهیه بکاپ",
     "run_stage_verify_source": "بررسی منبع",
@@ -249,7 +249,7 @@ STRINGS: dict[str, str] = {
     "schedule_daily": "روزانه",
     "schedule_weekly": "هفتگی",
     "schedule_monthly": "ماهانه",
-    "schedule_cron": "زمان‌بندی کرون",
+    "schedule_cron": ("📅 زمان\u200cبندی کرون"),
     "compression_none": "◻️ بدون فشرده‌سازی",
     "archive_tar": "📦 TAR ✓",
     "archive_zip": "📦 ZIP",
@@ -315,7 +315,7 @@ STRINGS: dict[str, str] = {
         "📌 <b>نام سرور:</b> <code>{name}</code>\n"
         "🌐 <b>نشانی:</b> <code>{host}:{port}</code>\n👤 <b>کاربر:</b> <code>{username}</code>\n"
         "🔐 <b>احراز هویت:</b> {authentication}\n"
-        "🛡 <b>اثرانگشت:</b> <code>{fingerprint}</code>\n✅ <b>وضعیت:</b> {status}\n━━━━━━━━━━━━━━"
+        "🛡 <b>اثرانگشت:</b> <code>{fingerprint}</code>\n📋 <b>وضعیت:</b> {status}\n━━━━━━━━━━━━━━"
     ),
     "ssh_private_key": "کلید خصوصی SSH",
     "choose_database_engine": section("🗄", "موتور پایگاه داده", "یک نوع پایگاه داده انتخاب کنید."),
@@ -376,11 +376,14 @@ STRINGS: dict[str, str] = {
     "ask_schedule_monthly": section(
         "📅", "زمان‌بندی ماهانه", "روز و زمان را به‌شکل <code>1 HH:MM</code> وارد کنید (روز ۱ تا ۲۸)."
     ),
-    "ask_schedule_cron": section(
-        "⚙️",
-        "زمان‌بندی کرون",
-        "یک عبارت پنج‌بخشی کرون لینوکس وارد کنید: دقیقه، ساعت، روز ماه، ماه و روز هفته. "
-        "نمونه: <code>15 * * * *</code> هر ساعت در دقیقه ۱۵ اجرا می‌شود.",
+    "ask_schedule_cron": (
+        "📅 <b>زمان\u200cبندی کرون</b>\nمنطقهٔ زمانی: <code>{timezone}</code>.\nاز"
+        " قالب ۵ فیلدی کرون لینوکس در منطقهٔ زمانی پشتیبان\u200cگیری استفاده کن"
+        "ید:\n<code>minute hour day-of-month month day-of-week</code>\nدقیقه"
+        "، ساعت، روز ماه، ماه، روز هفته\n\n<code>30 3 * * *</code> ← هر روز "
+        "ساعت ۰۳:۳۰\n<code>10 * * * *</code> ← هر ساعت در دقیقهٔ ۱۰\n<code>0"
+        " 2 1 * *</code> ← روز اول هر ماه ساعت ۰۲:۰۰\n\nعبارت کرون خود را بف"
+        "رستید."
     ),
     "choose_remote_server": "🌐 <b>سرور ریموت</b>\nسرور میزبان این منبع را انتخاب کنید.",
     "choose_assigned_admins": section(
@@ -458,8 +461,8 @@ STRINGS: dict[str, str] = {
         "منطقه زمانی بکاپ",
         "منطقه زمانی IANA را وارد کنید؛ برای نمونه <code>Asia/Tehran</code>.",
     ),
-    "status_draft": "پیش‌نویس",
-    "status_archived": "آرشیوشده",
+    "status_draft": "🟡 پیش‌نویس",
+    "status_archived": "⚪ آرشیوشده",
     "backup_created": section(
         "✅", "پروفایل بکاپ ذخیره شد", "پیش‌نویس <code>{name}</code> ساخته شد."
     ),
@@ -519,7 +522,7 @@ STRINGS: dict[str, str] = {
     ),
     "caption_backup_completed": "📦 <b>بکاپ کامل شد</b>",
     "caption_profile": "📌 <b>پروفایل:</b> {value}",
-    "caption_status": "✅ <b>وضعیت:</b> کامل‌شده",
+    "caption_status": "📋 <b>وضعیت:</b> کامل‌شده",
     "caption_started": "⏱ <b>شروع:</b> {value}",
     "caption_completed": "🏁 <b>پایان:</b> {value}",
     "caption_schedule": "⏰ <b>زمان‌بندی:</b> {value}",
@@ -545,20 +548,130 @@ STRINGS: dict[str, str] = {
     "caption_final_size": "🗜 <b>اندازه نهایی بکاپ:</b> {value}",
     "caption_part": "📄 <b>بخش {number} از {total}</b>",
     "settings_text": (
-        "⚙️ <b>تنظیمات اجرا</b>\nاتصال: MTProto Bot\nSOCKS5: {proxy}\n"
-        "حد آپلود: <code>{limit:,}</code> بایت\nمنطقه زمانی: <code>{timezone}</code>\n"
-        "پشتیبانی SQLite: فعال"
+        "⚙️ <b>تنظیمات</b>\n\n<b>⚙️ محیط اجرا</b>\nمحیط: {environment} · نسخه"
+        ": {version}\nپایتون: {python}\n\n<b>🗄 پایگاه داده</b>\n{backend}: {da"
+        "tabase}\nساختار: {schema}\nمهاجرت: {revision}\n\n<b>📡 تلگرام</b>\nبات "
+        "/ ورکر MTProto: {telegram}\nحد بارگذاری: {limit:,} بایت\n\n<b>🌐 شبکه"
+        "</b>\nSOCKS5: {proxy} · {endpoint}\nاتصال: {proxy_status}\n\n<b>🕒 زما"
+        "ن</b>\nمنطقهٔ زمانی پشتیبان\u200cگیری: {timezone}\nزمان UTC: {utc}\n\n<b>💾"
+        " فضای ذخیره\u200cسازی</b>\n{storage} · آزاد: {disk:,} MiB\nدر انتظار: {p"
+        "ending_count} / {pending:,} MiB\n{directories}\n\n<b>🗂 پشتیبان\u200cها</b"
+        ">\nپروفایل\u200cها: {profiles} · اجراهای فعال: {running}\nزمان\u200cبند: {sch"
+        "eduler}\nناموفق: {failed} · فایل\u200cهای نگهداری\u200cشده: {retained}\n\n<b>🔐"
+        " امنیت</b>\nرمزنگاری اطلاعات محرمانه: {encryption}"
     ),
     "health_text": (
-        "🩺 <b>وضعیت سامانه</b>\nسامانه: {status}\n{live} زنده  {ready} آماده\n"
-        "{database} پایگاه کنترل  {schema} طرح {revision}\n"
-        "{worker} ورکر  {scheduler} زمان‌بند  {telegram} تلگرام\n"
-        "فضای آزاد: {disk:,} م‌ب | در انتظار: {pending:,} م‌ب\n"
-        "اجرا صف/فعال/ناموفق: {queued}/{running}/{failed} | اجاره کهنه: {stale}\n"
-        "خروجی ناموفق نگه‌داری‌شده: {retained} | ابزارها: {tools}"
+        "🩺 <b>سلامت سیستم</b>\nوضعیت کلی: {status}\n\n{live} برنامه\n{database"
+        "} پایگاه داده ({backend})\n{schema} ساختار / مهاجرت\u200cها\n{worker} ور"
+        "کر\n{scheduler} زمان\u200cبند\n{telegram} بات / ورکر تلگرام\n{proxy} پراک"
+        "سی\n{helper} دستیار GitLab\n{storage} فضای ذخیره\u200cسازی\n\n<b>💾 فضای ذخ"
+        "یره\u200cسازی</b>\nآزاد / مصرف\u200cشده: {disk:,} / {used:,} MiB\nدر انتظار: "
+        "{pending_count} / {pending:,} MiB\n\n<b>🗂 عملیات</b>\nدر صف / در حال"
+        " اجرا / ناموفق: {queued} / {running} / {failed}\nاجاره\u200cهای منقضی: "
+        "{stale} · فایل\u200cهای نگهداری\u200cشده: {retained}\nابزارهای در دسترس: {to"
+        "ols}\nمهاجرت: {revision}\n\n<b>📂 مسیرهای اجرا</b>\n{directories}\n\n🕒 ز"
+        "مان بررسی: {checked}"
     ),
     "active": "فعال",
     "inactive": "غیرفعال",
     "yes": "بله",
     "no": "خیر",
+    "schedule_interval_mode": ("🕒 زمان\u200cبندی بازه\u200cای"),
+    "choose_schedule_mode": (
+        "⏱ <b>نوع زمان\u200cبندی</b>\nبازه\u200cای یا کرون را انتخاب کنید. منطقهٔ زما"
+        "نی: <code>{timezone}</code>.{current}"
+    ),
+    "current_schedule_mode": ("\n\n<b>نوع فعلی:</b> {mode}\n{schedule}"),
+    "available_paths": ("📌 <b>مسیرهای در دسترس</b>\n{paths}\nبرای کپی روی مسیر بزنید."),
+    "no_available_paths": (
+        "در حال حاضر هیچ مسیر تأییدشده\u200cای توسط ورکر در دسترس گزارش نشده است."
+    ),
+    "invalid_cron": (
+        "⚠️ <b>عبارت کرون نامعتبر</b>\nیک عبارت معتبر کرون لینوکس با ۵ فیلد"
+        " بفرستید؛ مانند <code>30 3 * * *</code>."
+    ),
+    "health_healthy": ("🟢 سالم"),
+    "health_warning": ("🟡 هشدار"),
+    "health_error": ("🔴 خطا"),
+    "health_disabled": ("⚪ غیرفعال / پیکربندی نشده"),
+    "health_unverified": ("🟡 بررسی نشده"),
+    "health_unavailable": (
+        "🔴 <b>وضعیت سلامت در دسترس نیست</b>\nبررسی سلامت پایگاه داده ناموفق"
+        " بود. گزارش\u200cهای سرویس را بررسی کنید."
+    ),
+    "audit_entry": ("{icon} <b>{name}</b>\n🕒 {timestamp}\n{details}"),
+    "audit_target": ("هدف: {kind} <code>{target}</code>"),
+    "audit_actor": ("کاربر: <code>{actor}</code>"),
+    "audit_detail": ("{label}: {value}"),
+    "audit_unknown": ("رویداد {event}"),
+    "audit_event_application_startup": ("راه\u200cاندازی برنامه"),
+    "audit_event_proxy_mode": ("حالت پراکسی"),
+    "audit_event_telegram_connection_state": ("اتصال تلگرام"),
+    "audit_event_backup_timezone_changed": ("تغییر منطقهٔ زمانی پشتیبان\u200cگیری"),
+    "audit_event_backup_created": ("پشتیبان ایجاد شد"),
+    "audit_event_backup_edited": ("پشتیبان ویرایش شد"),
+    "audit_event_backup_deleted": ("پشتیبان حذف شد"),
+    "audit_event_backup_enabled": ("پشتیبان فعال شد"),
+    "audit_event_backup_disabled": ("پشتیبان غیرفعال شد"),
+    "audit_event_admin_created": ("مدیر ایجاد شد"),
+    "audit_event_admin_edited": ("مدیر ویرایش شد"),
+    "audit_event_admin_deleted": ("مدیر حذف شد"),
+    "audit_event_admin_enabled": ("مدیر فعال شد"),
+    "audit_event_admin_disabled": ("مدیر غیرفعال شد"),
+    "audit_event_remote_server_created": ("سرور راه دور ایجاد شد"),
+    "audit_event_remote_server_edited": ("سرور راه دور ویرایش شد"),
+    "audit_event_remote_server_deleted": ("سرور راه دور حذف شد"),
+    "audit_event_remote_server_enabled": ("سرور راه دور فعال شد"),
+    "audit_event_remote_server_disabled": ("سرور راه دور غیرفعال شد"),
+    "audit_event_backup_draft_created": ("ایجاد پیش\u200cنویس پشتیبان"),
+    "audit_event_backup_profile_configured": ("پیکربندی پشتیبان"),
+    "audit_event_backup_profile_configuration_updated": ("ویرایش پیکربندی پشتیبان"),
+    "audit_event_backup_access_granted": ("اعطای دسترسی پشتیبان"),
+    "audit_event_backup_access_revoked": ("لغو دسترسی پشتیبان"),
+    "audit_event_language_changed": ("تغییر زبان"),
+    "audit_event_superadmin_bootstrap": ("آماده\u200cسازی مدیر ارشد"),
+    "audit_event_superadmin_restored": ("بازیابی مدیر ارشد"),
+    "audit_event_remote_server_trusted": ("تأیید سرور راه دور"),
+    "audit_event_remote_server_retrusted": ("تغییر تأیید سرور راه دور"),
+    "audit_event_remote_server_connection_tested": ("آزمایش اتصال راه دور"),
+    "audit_event_backup_run_queued": ("اجرای پشتیبان: در صف"),
+    "audit_event_backup_run_claimed": ("اجرای پشتیبان: دریافت شد"),
+    "audit_event_backup_run_started": ("اجرای پشتیبان: آغاز شد"),
+    "audit_event_backup_run_completed": ("اجرای پشتیبان: تکمیل شد"),
+    "audit_event_backup_run_failed": ("اجرای پشتیبان: ناموفق"),
+    "audit_event_backup_run_cancelled": ("اجرای پشتیبان: لغو شد"),
+    "audit_event_backup_run_cancel_requested": ("اجرای پشتیبان: درخواست لغو"),
+    "audit_event_backup_run_retry_requested": ("اجرای پشتیبان: درخواست تلاش مجدد"),
+    "audit_event_backup_run_recovered": ("اجرای پشتیبان: بازیابی شد"),
+    "audit_event_backup_run_delivery_pending": ("اجرای پشتیبان: در انتظار ارسال"),
+    "audit_event_backup_run_delivery_retried": ("اجرای پشتیبان: تلاش مجدد ارسال"),
+    "audit_event_backup_run_artifact_purged": ("اجرای پشتیبان: حذف فایل"),
+    "audit_label_connected": ("متصل"),
+    "audit_label_proxy_enabled": ("پراکسی"),
+    "audit_label_socks5_enabled": ("SOCKS5"),
+    "audit_label_mode": ("حالت"),
+    "audit_label_status": ("وضعیت"),
+    "audit_label_stage": ("مرحله"),
+    "audit_label_error_code": ("کد خطا"),
+    "audit_label_admin_id": ("شناسهٔ مدیر"),
+    "audit_label_timezone": ("منطقهٔ زمانی"),
+    "audit_label_backup": ("پشتیبان"),
+    "audit_label_backup_run": ("اجرا"),
+    "audit_label_admin": ("مدیر"),
+    "audit_label_user": ("کاربر"),
+    "audit_label_remote_server": ("سرور راه دور"),
+    "audit_label_system_settings": ("تنظیمات"),
+    "health_idle": "⚪ آماده (بدون پروفایل زمان\u200cبندی\u200cشده)",
+    "audit_label_backup_timezone": "منطقهٔ زمانی پشتیبان\u200cگیری",
+    "audit_label_source_type": "منبع",
+    "audit_label_schedule": "زمان\u200cبندی",
+    "audit_label_compression": "فشرده\u200cسازی",
+    "audit_label_encryption": "رمزنگاری",
+    "audit_label_assigned_admin_count": "مدیران مجاز",
+    "audit_label_enabled": "فعال",
+    "audit_label_database_credentials_changed": "تغییر رمز پایگاه داده",
+    "audit_label_age_unlock_changed": "تغییر عبارت عبور Age",
+    "audit_event_backup_run_succeeded": "اجرای پشتیبان موفق",
+    "audit_event_backup_run_retention_cleanup": "پاک\u200cسازی فایل نگهداری\u200cشده",
+    "audit_event_authorization_denied": "دسترسی رد شد",
 }
