@@ -14,8 +14,6 @@ x-service: &service
     PENDING_DELIVERY_ROOT: /data/runtime/pending-delivery
     LOCAL_SOURCE_MOUNTS: ${LOCAL_SOURCE_MOUNTS:-}
     GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
-    GITLAB_LOCAL_BACKUP_PATH: /gitlab-backups
-    GITLAB_STAGING_ROOT: /data/gitlab-staging
   restart: unless-stopped
   init: true
   read_only: true
@@ -71,12 +69,24 @@ services:
 
   bot:
     <<: *service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     command: ["backup-bot"]
+    volumes:
+      - type: bind
+        source: ./.runtime
+        target: /data/runtime
+        bind:
+          create_host_path: false
+      # Local File / Directory
+      - /etc:/host/etc:ro
+      # Local GitLab
+      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
 
   worker:
     <<: *service
@@ -95,7 +105,10 @@ services:
         bind:
           create_host_path: false
       - gitlab_helper_control:/run/gitlab-helper
-      - gitlab_staging:/data/gitlab-staging
+      # Local File / Directory
+      - /etc:/host/etc:ro
+      # Local GitLab
+      - /opt/gitlab/data/backups:/host/gitlab-backups:rw
       # ---------------------------------------------------------------------------
       # Local File / Directory Backup
       # Uncomment and edit this bind mount when the worker must back up files
@@ -107,6 +120,19 @@ services:
       # /etc                      /host/etc
       #
       # - /etc:/host/etc:ro
+      # ---------------------------------------------------------------------------
+      # Local GitLab Backup
+      # Uncomment and edit this bind mount only when GitLab runs on this same host.
+      # GitLab native backups must be writable because the worker manages the
+      # generated native backup artifact after verified acquisition. The left side
+      # is the host filesystem path; the right side is worker-visible. Enter the
+      # worker-visible path in Telegram Local GitLab and keep LOCAL_SOURCE_MOUNTS
+      # consistent with this mapping.
+      #
+      # Host path                         Worker-visible path
+      # /opt/gitlab/data/backups          /host/gitlab-backups
+      #
+      # - /opt/gitlab/data/backups:/host/gitlab-backups:rw
 
   gitlab-helper:
     build: .
@@ -114,30 +140,20 @@ services:
     command: ["backup-gitlab-helper"]
     environment:
       GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
-      GITLAB_BACKUP_ROOT: /gitlab-backups
-      GITLAB_STAGING_ROOT: /data/gitlab-staging
-      GITLAB_STABILITY_INTERVAL_SECONDS: ${GITLAB_STABILITY_INTERVAL_SECONDS:-1}
-      GITLAB_STABILITY_CHECKS: ${GITLAB_STABILITY_CHECKS:-2}
-    user: "0:0"
     restart: unless-stopped
     init: true
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
-    # The helper alone gets the minimum filesystem capabilities needed to read and
-    # remove GitLab-owned mode-0700 artifacts and hand ownership to UID/GID 10001.
-    cap_add: ["CHOWN", "DAC_OVERRIDE"]
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 64
     tmpfs: ["/tmp:mode=0700,uid=10001,gid=10001"]
+    group_add:
+      - ${DOCKER_GID:-999}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - gitlab_helper_control:/run/gitlab-helper
-      # Configure the host side of this one bind for the local GitLab installation.
-      # No matching bind is needed on bot or worker, and no ACL/chmod is required.
-      - ${GITLAB_BACKUP_HOST_PATH:-/opt/gitlab/data/backups}:/gitlab-backups
-      - gitlab_staging:/data/gitlab-staging
 
   cli:
     <<: *service
@@ -155,4 +171,3 @@ services:
 volumes:
   postgres_data_v18:
   gitlab_helper_control:
-  gitlab_staging:
