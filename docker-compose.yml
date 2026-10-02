@@ -133,7 +133,7 @@ services:
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
-    cap_add: ["CHOWN", "DAC_OVERRIDE"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
     user: "0:0"
     mem_limit: 256m
     cpus: 0.5
