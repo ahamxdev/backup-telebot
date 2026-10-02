@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from pydantic import SecretStr
 from sqlalchemy import select
 
@@ -46,6 +47,7 @@ from pipeline.acquisition import gitlab as gitlab_provider
 from pipeline.deadline import RunDeadline
 from pipeline.finalize import finalize_artifact
 from pipeline.jobs import RunService
+from pipeline.schedule import Scheduler
 from pipeline.worker import PipelineRunner
 from security import SecretCipher
 
@@ -138,8 +140,11 @@ async def test_local_worker_pipeline_to_delivery_and_cleanup(
     } <= transitions
 
 
+@pytest.mark.parametrize(
+    "schedule_kind", [ScheduleKind.MANUAL, ScheduleKind.EVERY_N_MINUTES, ScheduleKind.CRON]
+)
 async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline(
-    database, session, settings, tmp_path: Path, monkeypatch
+    database, session, settings, tmp_path: Path, monkeypatch, schedule_kind
 ) -> None:
     staging = tmp_path / "gitlab-staging"
     staging.mkdir()
@@ -165,7 +170,13 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
         name="GitLab E2E",
         description=None,
         gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab"),
-        schedule=ScheduleConfig(ScheduleKind.MANUAL),
+        schedule=(
+            ScheduleConfig(ScheduleKind.MANUAL)
+            if schedule_kind is ScheduleKind.MANUAL
+            else ScheduleConfig(ScheduleKind.CRON, cron_expression="30 3 * * *")
+            if schedule_kind is ScheduleKind.CRON
+            else ScheduleConfig(ScheduleKind.EVERY_N_MINUTES, interval=5)
+        ),
         compression=CompressionConfig(CompressionFormat.GZIP, CompressionPreset.BALANCED),
         encryption=EncryptionConfig(EncryptionMode.AGE_PASSPHRASE, passphrase="strong secret"),
         admin_ids={admin.id},
@@ -193,22 +204,32 @@ async def test_gitlab_uses_archive_compression_encryption_and_multipart_pipeline
         }
 
     monkeypatch.setattr(gitlab_provider, "_invoke_helper", invoke)
-    queued = await RunService(session).enqueue_manual(owner, profile.id)
+    if schedule_kind is ScheduleKind.MANUAL:
+        run_id = (await RunService(session).enqueue_manual(owner, profile.id)).run.id
+    else:
+        due = profile.next_scheduled_at
+        assert due is not None
+        scheduled = await Scheduler(session).tick(due, "UTC")
+        assert len(scheduled) == 1
+        assert await Scheduler(session).tick(due, "UTC") == []
+        run_id = scheduled[0].run_id
+    queued_run = await session.get(BackupRun, run_id)
+    assert queued_run is not None
     claimed = await RunService(session).claim("gitlab-worker", 120, (RunStatus.QUEUED,))
     assert claimed is not None
     transport = SuccessfulTransport()
 
     await PipelineRunner(database.session_factory, configured, transport, "gitlab-worker").execute(
-        queued.run.id
+        queued_run.id
     )
 
-    await session.refresh(queued.run)
-    assert queued.run.status is RunStatus.SUCCEEDED, queued.run.error_message
-    assert queued.run.final_filename is not None
-    assert queued.run.final_filename.endswith(".tar.gz.age")
-    assert queued.run.original_size_bytes == native_sizes[0]
-    assert queued.run.final_size_bytes is not None
-    assert queued.run.final_size_bytes != queued.run.original_size_bytes
+    await session.refresh(queued_run)
+    assert queued_run.status is RunStatus.SUCCEEDED, queued_run.error_message
+    assert queued_run.final_filename is not None
+    assert queued_run.final_filename.endswith(".tar.gz.age")
+    assert queued_run.original_size_bytes == native_sizes[0]
+    assert queued_run.final_size_bytes is not None
+    assert queued_run.final_size_bytes != queued_run.original_size_bytes
     assert len(transport.paths) > 2
     expected_original = f"{native_sizes[0] / 1024:.2f} KiB"
     assert all(expected_original in caption for caption in transport.captions)

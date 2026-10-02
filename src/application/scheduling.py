@@ -1,0 +1,68 @@
+"""UTC schedule cursors interpreted in the persisted Backup Timezone."""
+
+import calendar
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from croniter import croniter
+
+from database.models import BackupProfile
+from domain.enums import ScheduleKind
+
+
+def next_scheduled_time(profile: BackupProfile, after: datetime, timezone: str) -> datetime | None:
+    if profile.schedule_kind in {ScheduleKind.MANUAL, ScheduleKind.ONCE}:
+        return None
+    after_utc = _as_utc(after)
+    if profile.schedule_kind in {
+        ScheduleKind.EVERY_N_MINUTES,
+        ScheduleKind.EVERY_N_HOURS,
+        ScheduleKind.EVERY_N_DAYS,
+    }:
+        if profile.schedule_interval is None:
+            raise ValueError("interval schedule is incomplete")
+        unit = {
+            ScheduleKind.EVERY_N_MINUTES: timedelta(minutes=1),
+            ScheduleKind.EVERY_N_HOURS: timedelta(hours=1),
+            ScheduleKind.EVERY_N_DAYS: timedelta(days=1),
+        }[profile.schedule_kind]
+        return after_utc + unit * profile.schedule_interval
+    if profile.schedule_kind is ScheduleKind.CRON:
+        if profile.schedule_cron is None:
+            raise ValueError("cron schedule is incomplete")
+        local = after_utc.astimezone(ZoneInfo(timezone))
+        return croniter(profile.schedule_cron, local).get_next(datetime).astimezone(UTC)
+    if profile.schedule_time is None:
+        raise ValueError("calendar schedule is incomplete")
+    hour, minute = (int(value) for value in profile.schedule_time.split(":"))
+    zone = ZoneInfo(timezone)
+    local = after_utc.astimezone(zone)
+    if profile.schedule_kind is ScheduleKind.DAILY:
+        candidate = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= local:
+            candidate += timedelta(days=1)
+    elif profile.schedule_kind is ScheduleKind.WEEKLY:
+        if profile.schedule_weekday is None:
+            raise ValueError("weekly schedule is incomplete")
+        days = (profile.schedule_weekday - local.weekday()) % 7
+        candidate = (local + timedelta(days=days)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        if candidate <= local:
+            candidate += timedelta(days=7)
+    else:
+        if profile.schedule_monthday is None:
+            raise ValueError("monthly schedule is incomplete")
+        year, month = local.year, local.month
+        day = min(profile.schedule_monthday, calendar.monthrange(year, month)[1])
+        candidate = local.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= local:
+            month = month % 12 + 1
+            year = year + (1 if month == 1 else 0)
+            day = min(profile.schedule_monthday, calendar.monthrange(year, month)[1])
+            candidate = candidate.replace(year=year, month=month, day=day)
+    return candidate.astimezone(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)

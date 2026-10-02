@@ -14,6 +14,7 @@ from application.profile_config import (
     ScheduleConfig,
     map_local_source_path,
 )
+from application.scheduling import next_scheduled_time
 from application.validation import validate_name
 from database.models import (
     AdminBackupAccess,
@@ -38,6 +39,7 @@ from infrastructure.repositories import (
     BackupRepository,
     NotFoundError,
     RemoteServerRepository,
+    SettingsRepository,
 )
 from security import SecretCipher
 
@@ -215,6 +217,7 @@ class BackupService:
             database is not None or encryption.mode is EncryptionMode.AGE_PASSPHRASE
         ):
             raise ValueError("secret cipher is required")
+        await SettingsRepository(self.session).get(for_update=True)
         profile = await self.backups.create_draft(
             clean_name, clean_description, source_type, actor.id
         )
@@ -224,9 +227,7 @@ class BackupService:
         profile.schedule_weekday = schedule.weekday
         profile.schedule_monthday = schedule.monthday
         profile.schedule_cron = schedule.normalized_cron_expression
-        profile.next_scheduled_at = (
-            None if schedule.kind in {ScheduleKind.MANUAL, ScheduleKind.CRON} else utc_now()
-        )
+        await self._register_schedule(profile)
         profile.compression_format = compression.format
         profile.archive_format = compression.archive_format
         profile.compression_algorithm = compression.algorithm
@@ -298,6 +299,18 @@ class BackupService:
         await self.session.commit()
         return profile
 
+    async def _register_schedule(self, profile: BackupProfile) -> None:
+        settings = await SettingsRepository(self.session).get(for_update=True)
+        now = utc_now()
+        if profile.schedule_kind is ScheduleKind.MANUAL or not profile.enabled:
+            profile.next_scheduled_at = None
+        elif profile.schedule_kind is ScheduleKind.CRON:
+            profile.next_scheduled_at = next_scheduled_time(profile, now, settings.backup_timezone)
+        else:
+            # Preserve the existing activation policy: non-cron schedules are due
+            # immediately, but the worker alone creates the actual backup run.
+            profile.next_scheduled_at = now
+
     def _require_cipher(self) -> SecretCipher:
         if self.cipher is None:
             raise ValueError("secret cipher is required")
@@ -331,6 +344,7 @@ class BackupService:
         enabled: bool | None = None,
     ) -> BackupProfile:
         AdminService.require_superadmin(actor)
+        await SettingsRepository(self.session).get(for_update=True)
         profile = await self._active(profile_id)
         await self._reserve_profile(profile.id)
         await self.session.refresh(profile)
@@ -350,9 +364,7 @@ class BackupService:
             ):
                 profile.next_scheduled_at = None
             elif not was_enabled and profile.schedule_kind is not ScheduleKind.ONCE:
-                profile.next_scheduled_at = (
-                    None if profile.schedule_kind is ScheduleKind.CRON else utc_now()
-                )
+                await self._register_schedule(profile)
         await self.audit.record(
             "backup_edited", actor_id=actor.id, target_type="backup", target_id=str(profile.id)
         )
@@ -380,6 +392,7 @@ class BackupService:
     ) -> BackupProfile:
         """Atomically replace a profile configuration after complete validation."""
         AdminService.require_superadmin(actor)
+        await SettingsRepository(self.session).get(for_update=True)
         profile = await self._active(profile_id)
         await self.session.refresh(profile, ("database_source", "files_source", "gitlab_source"))
         await self._reserve_profile(profile.id)
@@ -476,7 +489,7 @@ class BackupService:
         elif not enabled:
             profile.next_scheduled_at = None
         else:
-            profile.next_scheduled_at = None
+            await self._register_schedule(profile)
         profile.compression_format = compression.format
         profile.archive_format = compression.archive_format
         profile.compression_algorithm = compression.algorithm

@@ -13,6 +13,8 @@ x-service: &service
     WORK_ROOT: /data/runtime/work
     PENDING_DELIVERY_ROOT: /data/runtime/pending-delivery
     LOCAL_SOURCE_MOUNTS: ${LOCAL_SOURCE_MOUNTS:-}
+    GITLAB_BACKUP_ROOT: &gitlab_backup_root /gitlab-backups
+    GITLAB_STAGING_ROOT: &gitlab_staging_root /data/gitlab-staging
     GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
   restart: unless-stopped
   init: true
@@ -124,8 +126,8 @@ services:
     command: ["backup-gitlab-helper"]
     environment:
       GITLAB_HELPER_SOCKET: /run/gitlab-helper/helper.sock
-      GITLAB_BACKUP_ROOT: /gitlab-backups
-      GITLAB_STAGING_ROOT: /data/gitlab-staging
+      GITLAB_BACKUP_ROOT: *gitlab_backup_root
+      GITLAB_STAGING_ROOT: *gitlab_staging_root
     restart: unless-stopped
     init: true
     read_only: true

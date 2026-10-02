@@ -95,10 +95,33 @@ minute 15). Create and Edit both ask for **Schedule Type** after source configur
 choose **Interval Schedule** for the existing Manual Only, Once, Every N Minutes/Hours/Days,
 Daily, Weekly, and Monthly controls, or **Cron Schedule** for examples and a five-field expression.
 Edits show the current mode. Only one schedule is stored per profile; changing modes clears
-fields from the other mode. New and re-enabled cron profiles wait for the next occurrence,
-calculated by the existing scheduler in Backup Timezone and persisted in UTC. Standard cron
+fields from the other mode. Profile creation atomically persists the schedule and its
+`next_scheduled_at` cursor before reporting success. New and re-enabled cron profiles wait for
+the next occurrence, calculated in the database's singleton `SystemSettings.backup_timezone`
+and persisted in UTC. Non-cron schedules retain their existing immediate activation policy:
+the cursor is due now, and the worker creates the run on its next capacity-eligible poll.
+The bot does not enqueue a run when saving a profile. Manual profiles have no cursor.
+The worker re-queries profiles every poll, so registration needs no in-memory job or wake-up
+notification and survives restart. Due-run insertion, including overlap skips, and cursor
+advancement commit together under settings/profile locks. Scheduled slots remain unique.
+Changing Backup Timezone recalculates enabled cron/calendar cursors immediately; elapsed
+minute/hour/day intervals keep their existing cursor. The Linux host timezone does not
+interpret schedules. Cron uses a timezone-aware croniter base; at a nonexistent DST wall time
+croniter uses the first valid time after the gap, and repeated wall times can produce two
+separate UTC slots. Each UTC slot executes once. Active Runs lists queued/running/delivery
+operations; future executions appear on their profile as Next Run. Standard cron
 ranges, lists, steps, and month/weekday names are supported; seconds and non-Linux extensions
 are rejected. Compression resource limits live in global system settings.
+
+Local GitLab Create and Edit show an informational **GitLab Backup Directory** message after
+the container name. Compose supplies the same `GITLAB_BACKUP_ROOT=/gitlab-backups` and
+`GITLAB_STAGING_ROOT=/data/gitlab-staging` values to the helper and application via YAML
+anchors. The first is a helper-only namespace; it is never an input or native worker mount.
+The second is the verified staging namespace shared with the worker. The host source is set
+by `GITLAB_BACKUP_HOST_PATH` on the helper bind mount. For non-Compose deployments, explicitly
+configure `GITLAB_BACKUP_ROOT` to match the helper; missing metadata shows an unavailable
+message instead of guessing a path. This describes deployment configuration, not a liveness
+probe. Local profiles continue to persist `backup_path=NULL`.
 
 Local file path prompts show approved worker-visible paths as tappable `<code>` entries.
 The worker checks approval, resolved confinement, existence, and read/traversal permissions,

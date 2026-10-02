@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     FAILED_ARTIFACT_RETENTION_SECONDS: int = Field(default=604800, ge=60, le=31536000)
     UPLOAD_PROGRESS_INTERVAL_SECONDS: int = Field(default=5, ge=1, le=300)
     POSTGRES_CLIENT_ROOT: Path = Path("/usr/lib/postgresql")
+    # Informational helper namespace, set explicitly by the deployment. Never accessed here.
+    GITLAB_BACKUP_ROOT: Path | None = None
     GITLAB_HELPER_SOCKET: Path = Path("/run/gitlab-helper/helper.sock")
     GITLAB_STAGING_ROOT: Path = Path("/data/gitlab-staging")
     GITLAB_STABILITY_INTERVAL_SECONDS: float = Field(default=1.0, ge=0.05, le=60)
@@ -152,6 +154,10 @@ class Settings(BaseSettings):
             raise ValueError("TELEGRAM_RETRY_MAX_SECONDS must be at least the retry base")
         if self.MAX_SOURCE_SINGLE_FILE_BYTES > self.MAX_SOURCE_BYTES_PER_RUN:
             raise ValueError("MAX_SOURCE_SINGLE_FILE_BYTES cannot exceed the per-run byte limit")
+        if self.GITLAB_BACKUP_ROOT is not None and (
+            not self.GITLAB_BACKUP_ROOT.is_absolute() or str(self.GITLAB_BACKUP_ROOT) == "/"
+        ):
+            raise ValueError("GITLAB_BACKUP_ROOT must be an absolute non-root helper path")
         if not self.GITLAB_STAGING_ROOT.is_absolute():
             raise ValueError("GITLAB_STAGING_ROOT must be absolute")
         if self.HEALTH_WORKER_STALE_SECONDS <= self.HEALTH_HEARTBEAT_INTERVAL_SECONDS:

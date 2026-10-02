@@ -114,12 +114,29 @@ class RunService:
         await self.session.commit()
         return result
 
-    async def enqueue_scheduled(self, profile_id: int, scheduled_for: datetime) -> EnqueueResult:
-        return await self._enqueue(profile_id, RunTrigger.SCHEDULED, scheduled_for)
+    async def enqueue_scheduled(
+        self, profile_id: int, scheduled_for: datetime, *, commit: bool = True
+    ) -> EnqueueResult:
+        return await self._enqueue(profile_id, RunTrigger.SCHEDULED, scheduled_for, commit=commit)
 
     async def _enqueue(
-        self, profile_id: int, trigger: RunTrigger, scheduled_for: datetime | None
+        self,
+        profile_id: int,
+        trigger: RunTrigger,
+        scheduled_for: datetime | None,
+        *,
+        commit: bool = True,
     ) -> EnqueueResult:
+        if self.session.get_bind().dialect.name == "sqlite":
+            # SQLite's legacy driver does not BEGIN on SELECT / SAVEPOINT.
+            # A write fence starts the outer transaction before nested enqueue,
+            # and provides the row-lock equivalent used by PostgreSQL below.
+            await self.session.execute(
+                update(BackupProfile)
+                .where(BackupProfile.id == profile_id)
+                .values(updated_at=BackupProfile.updated_at)
+                .execution_options(synchronize_session=False)
+            )
         profile = await self.session.scalar(
             select(BackupProfile)
             .where(BackupProfile.id == profile_id)
@@ -165,7 +182,7 @@ class RunService:
         if active is not None:
             if trigger is RunTrigger.MANUAL:
                 return EnqueueResult(active, False)
-            return await self._record_skipped(profile_id, scheduled_for)
+            return await self._record_skipped(profile_id, scheduled_for, commit=commit)
         run = BackupRun(
             uuid=str(uuid.uuid4()),
             profile_id=profile_id,
@@ -196,7 +213,7 @@ class RunService:
                 raise
             if trigger is RunTrigger.MANUAL:
                 return EnqueueResult(active, False)
-            return await self._record_skipped(profile_id, scheduled_for)
+            return await self._record_skipped(profile_id, scheduled_for, commit=commit)
         await record_run_transition(
             self.session,
             "queued",
@@ -204,11 +221,12 @@ class RunService:
             status=RunStatus.QUEUED.value,
             stage=RunStage.QUEUED.value,
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return EnqueueResult(run, True)
 
     async def _record_skipped(
-        self, profile_id: int, scheduled_for: datetime | None
+        self, profile_id: int, scheduled_for: datetime | None, *, commit: bool = True
     ) -> EnqueueResult:
         skipped = BackupRun(
             uuid=str(uuid.uuid4()),
@@ -236,7 +254,8 @@ class RunService:
             if existing is None:
                 raise
             return EnqueueResult(existing, False)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return EnqueueResult(skipped, True)
 
     async def active_for_profile(self, profile_id: int) -> BackupRun | None:

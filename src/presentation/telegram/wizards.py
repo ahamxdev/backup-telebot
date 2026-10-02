@@ -455,6 +455,7 @@ class WizardMixin(LanguageHelpMixin):
                         item.data["gitlab_location"],
                         item.data["gitlab_container"],
                     ).validate()
+                    await self._gitlab_path_information(user)
                     await self._send(user, "gitlab_exclusive_warning")
                     await self._advance_to_schedule(session, user, item, state)
                 else:
@@ -1082,6 +1083,17 @@ class WizardMixin(LanguageHelpMixin):
     ) -> None:
         await self.fsm.transition(user.id, state, State.ADD_BACKUP_SCHEDULE)
         await self._schedule_mode_prompt(session, user, item)
+
+    async def _gitlab_path_information(self, user: User) -> None:
+        if self.settings.GITLAB_BACKUP_ROOT is None:
+            await self._send(user, "gitlab_paths_unconfigured")
+            return
+        await self._send(
+            user,
+            "gitlab_path_information",
+            native_path=code(str(self.settings.GITLAB_BACKUP_ROOT)),
+            staging_path=code(str(self.settings.GITLAB_STAGING_ROOT)),
+        )
 
     async def _path_prompt(self, user: User, item: Conversation) -> None:
         prompt = t(user.language_code, "ask_paths")

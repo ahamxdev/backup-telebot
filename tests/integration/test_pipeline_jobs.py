@@ -174,7 +174,7 @@ async def test_scheduler_runs_activation_immediately_then_advances_without_dupli
     second = await scheduler.tick(datetime(2026, 9, 11, 5, tzinfo=UTC), "UTC")
     assert len(first) == 1
     assert second == []
-    assert item.next_scheduled_at == datetime(2026, 9, 11, 5, 10, tzinfo=UTC)
+    assert item.next_scheduled_at.replace(tzinfo=UTC) == datetime(2026, 9, 11, 5, 10, tzinfo=UTC)
     assert await session.scalar(select(func.count(BackupRun.id))) == 1
 
 

@@ -14,7 +14,14 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select, text
 
+from application.backup_service import BackupService
 from application.health_service import collect_operational_health, touch_heartbeats
+from application.profile_config import (
+    CompressionConfig,
+    EncryptionConfig,
+    GitLabConfig,
+    ScheduleConfig,
+)
 from config.settings import Settings
 from database.models import (
     AdminBackupAccess,
@@ -46,6 +53,7 @@ from domain.enums import (
     SourceType,
 )
 from pipeline.jobs import RunService
+from pipeline.schedule import Scheduler
 
 POSTGRES_IMAGE = (
     "postgres:15-bookworm@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c"
@@ -276,6 +284,41 @@ async def exercise_postgresql(sqlite_url: str, postgres_url: str, tmp_path: Path
         claimed = [item for item in (first, second_claim) if item is not None]
         assert len(claimed) == 2
         assert {item.id for item in claimed} == {70, created.run.id}
+
+        # Concurrent production schedulers must re-read the cursor under the
+        # profile/settings locks and commit the slot and cursor together.
+        async with database.session_factory() as session:
+            owner = await session.get(User, 10)
+            assert owner is not None
+            scheduled_profile = await BackupService(session).create_gitlab_profile(
+                owner,
+                name="postgres-schedule",
+                description=None,
+                gitlab=GitLabConfig(SourceLocation.LOCAL, "gitlab-scheduled"),
+                schedule=ScheduleConfig(ScheduleKind.EVERY_N_MINUTES, interval=5),
+                compression=CompressionConfig(),
+                encryption=EncryptionConfig(EncryptionMode.NONE),
+                admin_ids=set(),
+            )
+            due = scheduled_profile.next_scheduled_at
+            assert due is not None
+            scheduled_profile_id = scheduled_profile.id
+
+        async def tick() -> list:
+            async with database.session_factory() as session:
+                return await Scheduler(session).tick(due, "UTC")
+
+        ticks = await asyncio.gather(tick(), tick())
+        assert sum(len(results) for results in ticks) == 1
+        async with database.session_factory() as session:
+            slots = list(
+                await session.scalars(
+                    select(BackupRun).where(BackupRun.profile_id == scheduled_profile_id)
+                )
+            )
+            assert len(slots) == 1 and slots[0].scheduled_for == due
+            persisted = await session.get(BackupProfile, scheduled_profile_id)
+            assert persisted is not None and persisted.next_scheduled_at > due
 
         now = datetime.now(UTC)
 

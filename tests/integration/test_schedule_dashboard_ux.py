@@ -186,7 +186,9 @@ async def test_modes_cron_validation_and_switching(
         valid_html(message)
 
 
-async def test_cron_create_edit_timezone_and_exclusive_storage(database) -> None:
+async def test_cron_create_edit_timezone_and_exclusive_storage(database, monkeypatch) -> None:
+    now = datetime(2026, 10, 1, 0, 1, tzinfo=UTC)
+    monkeypatch.setattr("application.backup_service.utc_now", lambda: now)
     async with database.session_factory() as session:
         user, _ = await BootstrapService(session).bootstrap_superadmin(1001)
         await SettingsService(session).set_backup_timezone(user, "Asia/Tehran")
@@ -204,11 +206,11 @@ async def test_cron_create_edit_timezone_and_exclusive_storage(database) -> None
             schedule=ScheduleConfig(ScheduleKind.CRON, cron_expression="30 3 * * *"),
             **common,
         )
-        assert profile.next_scheduled_at is None
+        assert profile.next_scheduled_at is not None
         now = datetime(2026, 10, 1, 0, 1, tzinfo=UTC)
         await Scheduler(session).tick(now, "Asia/Tehran")
         expected = datetime(2026, 10, 2, 0, 0, tzinfo=UTC)
-        assert profile.next_scheduled_at == expected
+        assert profile.next_scheduled_at.replace(tzinfo=UTC) == expected
         assert next_scheduled_time(profile, now, "Asia/Tehran") == expected
         await service.update_configuration(
             user,
@@ -451,4 +453,4 @@ async def test_wizard_persists_create_and_edit_cron(database, settings: Settings
         assert profile.schedule_kind is ScheduleKind.CRON
         assert profile.schedule_cron == "30 3 * * *"
         assert profile.schedule_interval is None
-        assert profile.next_scheduled_at is None
+        assert profile.next_scheduled_at is not None

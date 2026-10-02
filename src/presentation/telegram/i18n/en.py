@@ -371,6 +371,19 @@ STRINGS: dict[str, str] = {
         "You do not have any enabled remote servers yet.\n"
         "Add a remote server first, or choose Local Host."
     ),
+    "gitlab_path_information": (
+        "📁 <b>GitLab Backup Directory</b>\n"
+        "Configured helper-visible native path:\n{native_path}\n"
+        "Verified staging path shared with the worker:\n{staging_path}\n"
+        "The operator configures the native host mount with GITLAB_BACKUP_HOST_PATH. "
+        "No path input is needed. Only the helper accesses the native directory."
+    ),
+    "gitlab_paths_unconfigured": (
+        "📁 <b>GitLab Backup Directory</b>\n"
+        "The helper controls the native directory; no path input is needed. "
+        "Helper path information is unavailable in this deployment. "
+        "Configure GITLAB_BACKUP_ROOT to match the helper before using Local GitLab."
+    ),
     "gitlab_exclusive_warning": (
         "🛡 <b>Verified Native Acquisition</b>\nThe local helper removes only the exact native "
         "artifact after its staged size and SHA-256 have been verified.\n"
@@ -477,7 +490,7 @@ STRINGS: dict[str, str] = {
     "source_location_local": "Local Host",
     "source_location_remote": "Remote Server",
     "backup_timezone": "🕓 Backup Timezone",
-    "timezone_heading": "Timezone",
+    "timezone_heading": "🕒 Backup Timezone",
     "ask_backup_timezone": section(
         "🕓", "Backup Timezone", "Enter an IANA timezone, for example <code>Asia/Tehran</code>."
     ),

@@ -1,7 +1,9 @@
 import base64
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
+import pytest
 from pydantic import SecretStr
 from sqlalchemy import func, select
 
@@ -216,7 +218,8 @@ async def test_local_gitlab_skips_worker_path_prompt(database, settings: Setting
         assert item.state is State.ADD_BACKUP_SCHEDULE
         assert "gitlab_backup_path" not in item.data
         rendered = "\n".join(client.messages)
-        assert "GitLab Backup Directory" not in rendered
+        assert "GitLab Backup Directory" in rendered
+        assert "information is unavailable" in rendered
         assert "worker-visible" not in rendered
         assert "Write Access Required" not in rendered
         assert "/host/gitlab-backups" not in rendered
@@ -236,3 +239,33 @@ def test_gitlab_wizard_prompts_use_compact_html_style() -> None:
         prompt = t(LanguageCode.ENGLISH, key)
         assert all(fragment in prompt for fragment in fragments)
         assert "\n\n" not in prompt
+
+
+@pytest.mark.parametrize("editing", [False, True])
+@pytest.mark.parametrize("language", list(LanguageCode))
+async def test_local_gitlab_configured_paths_create_edit(database, settings, editing, language):
+    client = FakeClient()
+    setup = configured(settings).model_copy(
+        update={
+            "GITLAB_BACKUP_ROOT": Path("/native<&>"),
+            "GITLAB_STAGING_ROOT": Path("/staged<&>"),
+        }
+    )
+    dispatcher = TelegramDispatcher(database.session_factory, TelegramTransport(client), setup)
+    async with database.session_factory() as session:
+        actor, _ = await BootstrapService(session).bootstrap_superadmin(1001, language)
+        data = {"gitlab_location": SourceLocation.LOCAL}
+        if editing:
+            data.update(
+                editing_profile_id=1,
+                existing_gitlab_container="gitlab",
+                original_source_type=SourceType.GITLAB,
+            )
+        item = await dispatcher.fsm.set(actor.id, State.ADD_BACKUP_GITLAB_CONTAINER, data)
+        await dispatcher._flow(session, actor, "-" if editing else "gitlab", None, item)
+        assert item.state is State.ADD_BACKUP_SCHEDULE
+        prompt = client.messages[0]
+        assert "<code>/native&lt;&amp;&gt;</code>" in prompt
+        assert "<code>/staged&lt;&amp;&gt;</code>" in prompt
+        assert "/gitlab-backups" not in prompt and "/host/gitlab-backups" not in prompt
+        assert "gitlab_backup_path" not in item.data
