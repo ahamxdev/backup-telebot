@@ -1,0 +1,151 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- Nothing yet.
+
+---
+
+## [1.0.0] - 2026-10-02
+
+### Added
+
+- Telegram-based backup management interface.
+- English and Persian user interfaces.
+- Role-based access with `SUPERADMIN` and `ADMIN` roles.
+- Backup profile creation, editing, execution, and monitoring.
+- Manual backup execution.
+- One-time schedules.
+- Interval schedules.
+- Daily, weekly, and monthly schedules.
+- Five-field Cron scheduling.
+- Configurable Backup Timezone with UTC persistence.
+- PostgreSQL backup support.
+- MySQL and MariaDB backup support.
+- Microsoft SQL Server backup support.
+- SQLite backup support.
+- Local file and directory backups.
+- Remote file and directory backups over SSH.
+- Local GitLab native backup support.
+- Remote GitLab backup support.
+- Trusted remote-server management.
+- SSH host-key fingerprint verification and pinning.
+- Private-key SSH authentication.
+- Archive and compression pipeline.
+- Age-based backup encryption.
+- SHA-256 artifact verification.
+- Original backup size and final artifact size tracking.
+- Multipart Telegram delivery for large backup artifacts.
+- Durable backup runs, artifacts, and delivery state.
+- Durable retry scheduling.
+- Restart-safe worker recovery.
+- Artifact retention and cleanup handling.
+- Runtime health and component status reporting.
+- Audit logging.
+- Structured application logging.
+- PostgreSQL-backed application state.
+- Alembic database migrations.
+- Docker Compose deployment.
+- Dedicated backup worker service.
+- Dedicated Local GitLab helper service.
+- Production installation, security, and operations documentation.
+
+### Changed
+
+- Separated the Telegram Bot control plane from the backup Worker data plane.
+- Local filesystem backup mounts are now accessible only by the Worker.
+- Local source Create/Edit validation now uses a restricted Unix-domain validation interface between Bot and Worker.
+- Local GitLab backups use a dedicated helper-only architecture.
+- Docker socket access is restricted to the GitLab Helper.
+- Backup scheduling is independent of the host operating-system timezone.
+- Backup run configuration is persisted as an immutable snapshot.
+- Telegram delivery is serialized through a single managed Worker transport owner.
+- Local and remote GitLab acquisition paths use verified staging before further processing.
+
+### Fixed
+
+- Fixed Telegram delivery recovery after temporary SOCKS5 proxy or network outages.
+- Fixed Telethon client reuse after fatal background transport failures.
+- Added safe client retirement and recreation after unusable Telegram connections.
+- Fixed startup behavior so temporary Telegram connectivity failure does not prevent the Worker scheduler from running.
+- Fixed durable delivery retry behavior after Worker restarts.
+- Fixed retry handling for partially completed multipart deliveries.
+- Fixed exhausted delivery attempts during operator retry.
+- Fixed stale delivery checkpoints after lease ownership changes.
+- Fixed retention cleanup races with retry and purge operations.
+- Fixed repeated retries of invalid finalized-artifact metadata.
+- Fixed final-artifact durability before manifest publication.
+- Fixed GitLab Helper socket cleanup after timeout or cancellation.
+- Fixed unobserved completed Worker task exceptions.
+- Fixed Telethon session-path aliasing.
+- Fixed Local GitLab helper permission handling.
+- Fixed runtime directory ownership and permission handling.
+- Fixed multiple scheduling and recovery edge cases discovered during production hardening.
+
+### Security
+
+- Removed direct local backup-source filesystem mounts from the Telegram Bot.
+- Added restricted Worker-side validation for local source paths.
+- Added approved-root confinement for local filesystem sources.
+- Added traversal and symlink-escape protections.
+- Preserved acquisition-time revalidation to reduce TOCTOU risk.
+- Restricted the Local GitLab Docker socket to the GitLab Helper.
+- Hardened GitLab Helper operations to an allowlisted command set.
+- Added SSH fingerprint pinning for trusted remote servers.
+- Added encrypted storage for sensitive credentials.
+- Reduced secret exposure in logs, exceptions, tracebacks, and diagnostics.
+- Added safe subprocess output limits.
+- Hardened runtime file and directory permissions.
+- Added repository hygiene rules for sessions, runtime data, secrets, logs, and backup artifacts.
+- Added dependency and static-security validation.
+- Updated production dependencies following security review.
+
+### Reliability
+
+- Added bounded exponential delivery retry with jitter.
+- Added transient versus permanent Telegram failure classification.
+- Added recovery after SOCKS5 proxy interruption.
+- Added restart-safe delivery continuation.
+- Preserved successfully delivered multipart parts during retries.
+- Prevented source backup acquisition from being repeated solely because Telegram delivery failed.
+- Added Worker-side source validation availability checks.
+- Added durable run and artifact recovery.
+- Added additional filesystem and artifact verification before cleanup.
+
+### Documentation
+
+- Rewritten `README.md`.
+- Added `INSTALLATION.md`.
+- Added `SECURITY.md`.
+- Added `OPERATIONS.md`.
+- Added `AUDIT_REPORT.md`.
+- Documented Docker deployment and runtime directory preparation.
+- Documented Local GitLab helper architecture.
+- Documented Local Files / Directories Worker-only mount architecture.
+- Documented Telegram proxy configuration and delivery recovery.
+- Documented safe upgrades, migrations, backup, restore, troubleshooting, and destructive reset procedures.
+
+### Testing
+
+- Expanded the automated test suite to more than 500 tests.
+- Added Telegram transport failure and recovery tests.
+- Added durable delivery restart tests.
+- Added Local Files / Directories validation protocol tests.
+- Added Bot/Worker mount-isolation tests.
+- Added GitLab helper tests.
+- Added scheduler and timezone regression coverage.
+- Added PostgreSQL, MySQL/MariaDB, MSSQL, SSH, filesystem, and crash-recovery integration coverage.
+- Added Compose configuration validation.
+- Added Ruff, mypy, Bandit, compilation, migration-head, and whitespace validation.
+
+---
+
+[Unreleased]: https://github.com/ahamxdev/backup-telebot/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ahamxdev/backup-telebot/releases/tag/v1.0.0
