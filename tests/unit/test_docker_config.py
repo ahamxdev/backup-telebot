@@ -18,6 +18,13 @@ def test_docker_deployment_security_and_tools() -> None:
     worker = compose.split("  worker:", 1)[1].split("\n  gitlab-helper:", 1)[0]
     helper = compose.split("  gitlab-helper:", 1)[1].split("\n  cli:", 1)[0]
     assert "docker.sock" not in bot
+    assert ":/host/" not in bot
+    assert "/etc:/host/etc:ro" in worker
+    assert (
+        "LOCAL_SOURCE_VALIDATION_SOCKET: /data/runtime/data/source-validation/worker.sock"
+        in compose
+    )
+    assert ":/host/" not in helper
     assert "docker.sock" not in worker
     assert "GITLAB_BACKUP_HOST_PATH" not in bot
     assert "GITLAB_BACKUP_HOST_PATH" not in worker
@@ -32,7 +39,7 @@ def test_docker_deployment_security_and_tools() -> None:
     assert 'command: ["backup-gitlab-helper"]' in helper
     assert 'profiles: ["local-gitlab"]' in helper
     assert 'user: "0:0"' in helper
-    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE"]' in helper
+    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]' in helper
     assert "gitlab-helper:" not in worker.split("depends_on:", 1)[1].split("command:", 1)[0]
     assert 'cap_drop: ["ALL"]' in compose
     assert "source: ./.runtime" in compose
@@ -61,5 +68,5 @@ def test_local_gitlab_foreign_uid_boundary_is_confined_to_helper() -> None:
     assert "/gitlab-backups" not in bot
     assert ":/gitlab-backups" not in worker
     assert 'user: "0:0"' in helper
-    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE"]' in helper
+    assert 'cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]' in helper
     assert 'cap_drop: ["ALL"]' in helper

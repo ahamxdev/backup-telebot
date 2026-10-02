@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -44,7 +45,33 @@ def source(mode: TLSMode = TLSMode.VERIFY_FULL) -> DatabaseSource:
     )
 
 
+def wait_authenticated() -> None:
+    # SQL Server can log listener readiness while system-database upgrades still
+    # prevent SA authentication. Require an actual query before seeding the fixture.
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        try:
+            with pytds.connect(
+                server=HOST,
+                port=1433,
+                database="master",
+                user="sa",
+                password=PASSWORD,
+                autocommit=True,
+                timeout=5,
+                login_timeout=5,
+            ) as connection:
+                cursor = connection.cursor()
+                cursor.execute("SELECT 1")
+                assert cursor.fetchone() == (1,)
+                return
+        except (pytds.OperationalError, OSError):
+            time.sleep(1)
+    raise RuntimeError("SQL Server authenticated readiness timed out")
+
+
 def initialize() -> None:
+    wait_authenticated()
     with pytds.connect(
         server=HOST,
         port=1433,

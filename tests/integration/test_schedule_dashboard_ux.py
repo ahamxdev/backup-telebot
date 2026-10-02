@@ -22,6 +22,7 @@ from application.profile_config import (
 )
 from application.settings_service import SettingsService
 from application.worker_paths import available_worker_paths, publish_worker_paths
+from bootstrap.local_source_validation import LocalSourceValidationServer
 from config.settings import Settings
 from database.models import AuditEvent
 from domain.enums import EncryptionMode, LanguageCode, ScheduleKind, SourceLocation, SourceType
@@ -101,7 +102,12 @@ async def test_local_path_create_edit_and_back_use_worker_report(
         assert str(denied) not in prompt
         assert "visible&lt;&amp;&gt;" in prompt
         valid_html(prompt)
-        await dispatcher._flow(session, user, str(visible), None, item)
+        validator = LocalSourceValidationServer(configured)
+        await validator.start()
+        try:
+            await dispatcher._flow(session, user, str(visible), None, item)
+        finally:
+            await validator.close()
         assert item.state is State.ADD_BACKUP_SCHEDULE
         await dispatcher._back(session, user)
         assert "visible&lt;&amp;&gt;" in client.messages[-1]

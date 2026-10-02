@@ -21,10 +21,15 @@ class _FakeProcess:
         self.returncode: int | None = None
         self.wait_calls = 0
         self._exited = asyncio.Event()
+        self.stdin = None
+        self.stdout = asyncio.StreamReader()
+        self.stderr = asyncio.StreamReader()
 
     def exit(self, returncode: int = 0) -> None:
         self.returncode = returncode
         self._exited.set()
+        self.stdout.feed_eof()
+        self.stderr.feed_eof()
 
     async def wait(self) -> int:
         self.wait_calls += 1
@@ -209,3 +214,15 @@ async def test_shutdown_cancellation_reaps_active_child(
     assert child.returncode is not None
     with pytest.raises(ProcessLookupError):
         os.kill(child.pid, 0)
+
+
+async def test_large_process_output_is_drained_and_bounded() -> None:
+    from pathlib import Path
+
+    from pipeline.process import ProcessExecutionError, run_process
+
+    script = "import os;os.write(1,b'o'*1048576);os.write(2,b'e'*1048576);raise SystemExit(2)"
+    with pytest.raises(ProcessExecutionError) as caught:
+        await run_process(Path("/usr/bin/python3"), ("-c", script), timeout=10)
+    assert len(caught.value.stdout) == 16384
+    assert len(caught.value.stderr) == 16384

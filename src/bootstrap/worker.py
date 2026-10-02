@@ -11,11 +11,13 @@ from application.health_service import (
 )
 from application.run_config import snapshot_legacy_active_runs
 from application.worker_paths import publish_worker_paths
+from bootstrap.local_source_validation import LocalSourceValidationServer
 from config.settings import Settings
 from database.models import SystemSettings, utc_now
 from database.session import Database
 from domain.enums import RunStatus
-from infrastructure.telegram import TelegramUploadTransport, build_client, secure_session_path
+from infrastructure.telegram import TelegramUploadTransport
+from infrastructure.telegram.errors import classify_delivery_error
 from pipeline.jobs import RunService
 from pipeline.recovery import (
     cleanup_expired_failed_artifacts,
@@ -29,7 +31,7 @@ from security import SecretCipher
 
 
 async def run_worker(settings: Settings) -> None:
-    _, _, token = settings.require_telegram()
+    settings.require_telegram()
     key = settings.MASTER_ENCRYPTION_KEY_B64
     if key is None:
         raise ValueError("worker requires MASTER_ENCRYPTION_KEY_B64")
@@ -44,24 +46,34 @@ async def run_worker(settings: Settings) -> None:
             await validate_configured_tools(session, settings)
     finally:
         await validation_database.dispose()
-    secure_session_path(settings.TELEGRAM_WORKER_SESSION_PATH)
-    worker_settings = settings.model_copy(
-        update={"TELEGRAM_SESSION_PATH": settings.TELEGRAM_WORKER_SESSION_PATH}
-    )
-    client = build_client(worker_settings)
     database = Database(settings.DATABASE_URL)
     owner = f"{socket.gethostname()}:{uuid.uuid4()}"
-    upload_transport = TelegramUploadTransport(client, settings.UPLOAD_PROGRESS_INTERVAL_SECONDS)
+    upload_transport = TelegramUploadTransport.for_worker(settings)
     runner = PipelineRunner(database.session_factory, settings, upload_transport, owner)
     tasks: set[asyncio.Task[None]] = set()
     next_runtime_heartbeat = 0.0
+    source_validation = LocalSourceValidationServer(settings)
     try:
-        await client.start(bot_token=token)
-        secure_session_path(settings.TELEGRAM_WORKER_SESSION_PATH)
+        await source_validation.start()
+        try:
+            await upload_transport.prepare()
+        except Exception as exc:
+            structlog.get_logger().warning(
+                "worker_telegram_startup_unavailable",
+                exception_class=type(exc).__name__,
+                error_kind=classify_delivery_error(exc)[0].value,
+            )
         await cleanup_orphaned_mssql_artifacts(database.session_factory, settings)
         await recover_recorded_filesystem(database.session_factory, settings)
         while True:
-            tasks = {task for task in tasks if not task.done()}
+            for completed in tuple(tasks):
+                if completed.done():
+                    tasks.remove(completed)
+                    if not completed.cancelled() and completed.exception() is not None:
+                        structlog.get_logger().error(
+                            "worker_run_task_failed",
+                            exception_class=type(completed.exception()).__name__,
+                        )
             await cleanup_expired_failed_artifacts(database.session_factory, settings)
             async with database.session_factory() as session:
                 stored = await session.get(SystemSettings, 1)
@@ -78,7 +90,7 @@ async def run_worker(settings: Settings) -> None:
                     if heartbeat_due:
                         heartbeat_components: tuple[str, ...] = (
                             ("worker", "scheduler", "telegram_worker")
-                            if client.is_connected()
+                            if upload_transport.is_connected()
                             else ("worker", "scheduler")
                         )
                         await touch_heartbeats(
@@ -88,7 +100,9 @@ async def run_worker(settings: Settings) -> None:
                         )
                 elif heartbeat_due:
                     heartbeat_components = (
-                        ("worker", "telegram_worker") if client.is_connected() else ("worker",)
+                        ("worker", "telegram_worker")
+                        if upload_transport.is_connected()
+                        else ("worker",)
                     )
                     await touch_heartbeats(session, heartbeat_components)
                 if heartbeat_due:
@@ -112,11 +126,12 @@ async def run_worker(settings: Settings) -> None:
                     tasks.add(task)
             await asyncio.sleep(settings.WORKER_POLL_SECONDS)
     finally:
+        await source_validation.close()
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         try:
-            await client.disconnect()
+            await upload_transport.close()
         finally:
             await database.dispose()
 

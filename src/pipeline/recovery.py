@@ -54,7 +54,8 @@ async def cleanup_expired_failed_artifacts(
     async with sessions() as session:
         runs = list(
             await session.scalars(
-                select(BackupRun).where(
+                select(BackupRun)
+                .where(
                     BackupRun.status == RunStatus.FAILED,
                     BackupRun.pending_directory.is_not(None),
                     or_(
@@ -62,6 +63,7 @@ async def cleanup_expired_failed_artifacts(
                         BackupRun.failed_artifact_cleanup_at <= cleanup_time,
                     ),
                 )
+                .with_for_update(skip_locked=True)
             )
         )
         for run in runs:

@@ -57,13 +57,15 @@ class FakeTransport:
 
 
 class CancelAfterFirstSendTransport(FakeTransport):
-    def __init__(self, run: BackupRun) -> None:
+    def __init__(self, run: BackupRun, session) -> None:
         super().__init__()
         self.run = run
+        self.session = session
 
     async def send_file(self, entity: int, file: object, **kwargs: object) -> object:
         message = await super().send_file(entity, file, **kwargs)
         self.run.cancel_requested = True
+        await self.session.commit()
         return message
 
 
@@ -444,7 +446,7 @@ async def test_delivery_stops_at_cancel_boundary_and_preserves_success(session, 
     run, admins, artifact = await _pending_run(session, settings.PENDING_DELIVERY_ROOT)
     run.lease_owner = "delivery-worker"
     await session.commit()
-    transport = CancelAfterFirstSendTransport(run)
+    transport = CancelAfterFirstSendTransport(run, session)
 
     with pytest.raises(asyncio.CancelledError):
         await DeliveryService(session, transport, settings.PENDING_DELIVERY_ROOT).attempt(run)
@@ -468,3 +470,27 @@ async def test_delivery_stops_at_cancel_boundary_and_preserves_success(session, 
     await session.refresh(deliveries[0])
     assert run.status is RunStatus.CANCELLED
     assert deliveries[0].status is DeliveryStatus.SUCCEEDED
+
+
+def test_retry_cap_retains_bounded_jitter(session, settings) -> None:
+    service = delivery_service(session, FakeTransport(), settings, Clock())
+    service.jitter = lambda start, _end: start
+    assert service._retry_delay(50) == 55
+
+
+async def test_lost_lease_cannot_checkpoint_an_uploaded_part(session, settings) -> None:
+    run, _admins, artifact = await _pending_run(session, settings.PENDING_DELIVERY_ROOT)
+
+    class StolenLeaseTransport(FakeTransport):
+        async def send_file(self, entity, file, **kwargs):
+            message = await super().send_file(entity, file, **kwargs)
+            run.lease_owner = "replacement-worker"
+            await session.commit()
+            return message
+
+    with pytest.raises(RuntimeError, match="lease ownership lost"):
+        await delivery_service(session, StolenLeaseTransport(), settings, Clock()).attempt(run)
+    await session.rollback()
+    delivery = await session.scalar(select(BackupDelivery).order_by(BackupDelivery.id))
+    assert delivery.next_part == 1 and delivery.status is DeliveryStatus.PENDING
+    assert artifact.exists()

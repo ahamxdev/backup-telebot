@@ -34,6 +34,7 @@ from domain.enums import (
     SourceType,
     TLSMode,
 )
+from infrastructure.local_source_validation import LocalValidationUnavailable, validate_local_source
 from infrastructure.repositories import (
     AccessRepository,
     ConflictError,
@@ -406,6 +407,21 @@ class WizardMixin(LanguageHelpMixin):
                 FilesConfig(
                     item.data["location"], item.data["paths"], item.data.get("remote_server_id")
                 ).validate()
+                if item.data["location"] is SourceLocation.LOCAL:
+                    mapper = LocalSourcePathMapper(
+                        self.settings.allowed_source_roots(),
+                        self.settings.denied_source_roots(),
+                        self.settings.local_source_mounts(),
+                    )
+                    # Existing profiles persist host paths. Only the edit keep-value shortcut
+                    # translates them; newly entered paths must be worker-visible.
+                    paths = item.data["paths"]
+                    if text == "-":
+                        paths = tuple(mapper.container_path(path) for path in paths)
+                    validated = []
+                    for path in paths:
+                        validated.append(await validate_local_source(path, self.settings))
+                    item.data["paths"] = tuple(validated)
                 await self._advance_to_schedule(session, user, item, state)
             elif state is State.ADD_BACKUP_GITLAB_LOCATION:
                 if action not in {"location_local", "location_remote"}:
@@ -718,6 +734,8 @@ class WizardMixin(LanguageHelpMixin):
                 expected_state=state.value,
                 validation_result="accepted",
             )
+        except LocalValidationUnavailable:
+            await self._send(user, "local_validation_unavailable")
         except (ValueError, KeyError) as exc:
             log.info(
                 "telegram_wizard_input",
@@ -1408,7 +1426,7 @@ class WizardMixin(LanguageHelpMixin):
                 "backup_profile_confirm_failed",
                 **context,
                 validation_result="internal_error",
-                failure_reason=f"{type(exc).__name__}: {' '.join(str(exc).split())[:500]}",
+                failure_reason=type(exc).__name__,
             )
             await self._send(user, "backup_confirm_save_failed")
             return

@@ -225,6 +225,20 @@ def local_source_available(raw: str, settings: Settings) -> bool:
         return False
 
 
+def preflight_local_source(raw: str, settings: Settings) -> str:
+    """Open and close the selected source securely, without reading its contents."""
+    path, initial = _validated_local_source(raw, settings)
+    descriptor, opened = _open_local_root(path)
+    try:
+        if not _same_inode(initial, opened):
+            raise PipelineError("SOURCE_CHANGED", "source changed during validation")
+        if stat.S_ISDIR(opened.st_mode) and not os.access(path, os.X_OK):
+            raise PipelineError("UNSAFE_SOURCE", "source is unreadable", reason="unavailable")
+        return "directory" if stat.S_ISDIR(opened.st_mode) else "file"
+    finally:
+        os.close(descriptor)
+
+
 def _verify_path_identity(path: Path, expected: os.stat_result) -> None:
     try:
         current = path.lstat()

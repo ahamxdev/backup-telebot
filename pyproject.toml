@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "backup-telebot"
 version = "0.1.0"
-description = "Security-first Telegram backup control plane (Phase 1)"
+description = "Telegram backup control plane with durable worker delivery"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -98,3 +98,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["docker", "docker.*"]
 ignore_missing_imports = true
+
+[tool.uv]
+# Security floor for the existing Docker SDK / requests transitive dependency.
+constraint-dependencies = ["urllib3>=2.8.0,<3"]

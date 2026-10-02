@@ -498,6 +498,9 @@ class RunService:
         """Safely resume failed deliveries or create a new run before finalization."""
         AdminService.require_superadmin(actor)
         run = await self.details(actor, run_id)
+        await self.session.refresh(
+            run, ("status", "lease_owner", "pending_directory"), with_for_update=True
+        )
         if run.status is not RunStatus.FAILED or run.lease_owner is not None:
             raise NotFoundError("terminal failed run is not retryable")
         if run.pending_directory is None:
@@ -544,6 +547,7 @@ class RunService:
         for delivery in failed:
             delivery.status = DeliveryStatus.PENDING
             delivery.attempts = 0
+            delivery.part_attempts = 0
             delivery.next_attempt_at = now
             delivery.last_error = None
         await AuditRepository(self.session).record(
@@ -565,6 +569,9 @@ class RunService:
     ) -> None:
         AdminService.require_superadmin(actor)
         run = await self.details(actor, run_id)
+        await self.session.refresh(
+            run, ("status", "lease_owner", "pending_directory"), with_for_update=True
+        )
         if (
             run.status is not RunStatus.FAILED
             or run.lease_owner is not None

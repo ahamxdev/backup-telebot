@@ -52,7 +52,7 @@ def bootstrap_superadmin() -> None:
     try:
         results = asyncio.run(_bootstrap(Settings()))
     except Exception as exc:
-        typer.echo(f"ERROR: {exc}", err=True)
+        typer.echo(f"ERROR: superadmin bootstrap failed ({type(exc).__name__})", err=True)
         raise typer.Exit(1) from exc
     for telegram_id, created in results:
         typer.echo(

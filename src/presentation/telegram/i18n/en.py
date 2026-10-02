@@ -1,6 +1,9 @@
 from presentation.telegram.i18n.message import section
 
 STRINGS: dict[str, str] = {
+    "local_validation_unavailable": (
+        "Local source validation is temporarily unavailable. Please retry."
+    ),
     "backups": "💾 Backups",
     "admins": "👥 Admins",
     "remote_servers": "🖥 Remote Servers",

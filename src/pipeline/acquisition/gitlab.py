@@ -11,7 +11,7 @@ import shlex
 import shutil
 import stat
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
@@ -66,19 +66,21 @@ def detect_new_backup(
 async def _invoke_helper(
     source: GitLabSource, settings: Settings, deadline_seconds: float
 ) -> dict[str, Any]:
+    writer: asyncio.StreamWriter | None = None
     try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_unix_connection(settings.GITLAB_HELPER_SOCKET), timeout=deadline_seconds
-        )
-        request = {"operation": "gitlab_backup_acquire", "container": source.container_name}
-        writer.write(json.dumps(request, separators=(",", ":")).encode() + b"\n")
-        await writer.drain()
-        raw = await asyncio.wait_for(reader.readline(), timeout=deadline_seconds)
-        writer.close()
-        await writer.wait_closed()
-        response = json.loads(raw)
-    except (OSError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+        async with asyncio.timeout(deadline_seconds):
+            reader, writer = await asyncio.open_unix_connection(settings.GITLAB_HELPER_SOCKET)
+            request = {"operation": "gitlab_backup_acquire", "container": source.container_name}
+            writer.write(json.dumps(request, separators=(",", ":")).encode() + b"\n")
+            await writer.drain()
+            response = json.loads(await reader.readline())
+    except (OSError, TimeoutError, ValueError) as exc:
         raise PipelineError("GITLAB_HELPER_FAILED", "GitLab helper is unavailable") from exc
+    finally:
+        if writer is not None:
+            writer.close()
+            with suppress(OSError, TimeoutError):
+                await asyncio.wait_for(writer.wait_closed(), timeout=5)
     if not isinstance(response, dict) or not response.get("ok"):
         raise PipelineError("GITLAB_BACKUP_FAILED", "local GitLab acquisition failed")
     if set(response) != {"ok", "staging_name", "native_name", "size", "sha256"}:

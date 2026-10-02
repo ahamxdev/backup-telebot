@@ -116,6 +116,41 @@ async def run_age_passphrase(
             os.close(slave)
 
 
+async def _drain_tail(reader: asyncio.StreamReader | None, limit: int) -> bytes:
+    """Drain pipes while keeping only bounded diagnostics in memory."""
+    if reader is None:
+        return b""
+    tail = bytearray()
+    while chunk := await reader.read(64 * 1024):
+        tail.extend(chunk)
+        if len(tail) > limit:
+            del tail[:-limit]
+    return bytes(tail)
+
+
+async def _communicate_bounded(
+    process: asyncio.subprocess.Process, stdin_data: bytes | None
+) -> tuple[bytes, bytes]:
+    stdout = asyncio.create_task(_drain_tail(process.stdout, _STDOUT_LIMIT))
+    stderr = asyncio.create_task(_drain_tail(process.stderr, _STDERR_LIMIT))
+    try:
+        if process.stdin is not None:
+            try:
+                process.stdin.write(stdin_data or b"")
+                await process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # a tool may exit before reading its configuration
+            finally:
+                process.stdin.close()
+        result = await asyncio.gather(stdout, stderr)
+        await process.wait()
+        return result[0], result[1]
+    finally:
+        for task in (stdout, stderr):
+            task.cancel()
+        await asyncio.gather(stdout, stderr, return_exceptions=True)
+
+
 async def run_process(
     executable: Path,
     args: tuple[str, ...],
@@ -150,7 +185,7 @@ async def run_process(
         raise
     try:
         async with asyncio.timeout(timeout):
-            communication = asyncio.create_task(process.communicate(stdin_data))
+            communication = asyncio.create_task(_communicate_bounded(process, stdin_data))
             try:
                 while True:
                     done, _pending = await asyncio.wait((communication,), timeout=0.5)

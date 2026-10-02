@@ -213,3 +213,33 @@ async def test_cleanup_refuses_checksum_mismatch(database, session, settings) ->
     assert directory.exists()
     assert run.pending_directory == str(directory)
     assert run.failed_artifact_cleaned_at is None
+
+
+async def test_operator_retry_resets_failed_part_budget_without_resetting_progress(
+    session, settings
+) -> None:
+    from database.models import BackupDelivery
+    from domain.enums import DeliveryStatus
+
+    run, _artifact, directory = await make_failed_run(
+        session, settings, 99, datetime.now(UTC) + timedelta(days=1)
+    )
+    owner = await session.scalar(select(User).where(User.role == Role.SUPERADMIN))
+    delivery = BackupDelivery(
+        run_id=run.id,
+        admin_id=owner.id,
+        status=DeliveryStatus.FAILED,
+        attempts=10,
+        part_attempts=10,
+        next_part=1,
+        last_error="TRANSIENT:ConnectionResetError",
+    )
+    session.add(delivery)
+    await session.commit()
+    result = await RunService(session).retry_failed(owner, run.id, settings.PENDING_DELIVERY_ROOT)
+    assert result.resumed_delivery
+    await session.refresh(delivery)
+    assert delivery.status is DeliveryStatus.PENDING
+    assert delivery.attempts == 0 and delivery.part_attempts == 0
+    assert delivery.next_part == 1
+    assert directory.exists()

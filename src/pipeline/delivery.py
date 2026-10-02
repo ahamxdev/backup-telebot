@@ -4,7 +4,6 @@ import secrets
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -12,7 +11,7 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from telethon.errors import FloodError, RPCError, ServerError, TimedOutError
+from structlog.contextvars import bound_contextvars
 
 from application.observability import record_run_transition
 from application.run_config import restore_run_admin_ids, restore_run_config
@@ -36,6 +35,7 @@ from domain.enums import (
     SourceLocation,
 )
 from infrastructure.repositories import AccessRepository
+from infrastructure.telegram.errors import DeliveryErrorKind, classify_delivery_error
 from pipeline.errors import PipelineError
 from pipeline.finalize import delivery_artifacts
 from pipeline.workspace import remove_owned_directory
@@ -48,12 +48,6 @@ log = structlog.get_logger()
 
 class DeliveryTransport(Protocol):
     async def send_file(self, entity: int, file: str, **kwargs: Any) -> Any: ...
-
-
-class DeliveryErrorKind(StrEnum):
-    TRANSIENT = "TRANSIENT"
-    PERMANENT = "PERMANENT"
-    FLOOD_WAIT = "FLOOD_WAIT"
 
 
 _RANDOM = secrets.SystemRandom()
@@ -198,17 +192,6 @@ def build_backup_caption(
     return TelegramHtml("\n".join(sections))
 
 
-def classify_delivery_error(exc: Exception) -> tuple[DeliveryErrorKind, int | None]:
-    if isinstance(exc, FloodError):
-        seconds = getattr(exc, "seconds", None)
-        return DeliveryErrorKind.FLOOD_WAIT, (max(0, int(seconds)) if seconds is not None else None)
-    if isinstance(exc, (ServerError, TimedOutError, TimeoutError, OSError)):
-        return DeliveryErrorKind.TRANSIENT, None
-    if isinstance(exc, RPCError):
-        return DeliveryErrorKind.PERMANENT, None
-    return DeliveryErrorKind.PERMANENT, None
-
-
 class DeliveryService:
     def __init__(
         self,
@@ -242,10 +225,15 @@ class DeliveryService:
         self.timezone = timezone
         self.now = now
         self.jitter = jitter
+        self._lease_owner: str | None = None
 
-    async def _cancel_boundary(self, run: BackupRun) -> None:
-        await self.session.refresh(run, ("cancel_requested",))
-        if run.cancel_requested:
+    async def _cancel_boundary(
+        self, run: BackupRun, *, fence: bool = False, check_cancel: bool = True
+    ) -> None:
+        await self.session.refresh(run, ("cancel_requested", "lease_owner"), with_for_update=fence)
+        if run.lease_owner != self._lease_owner:
+            raise RuntimeError("run lease ownership lost")
+        if check_cancel and run.cancel_requested:
             raise asyncio.CancelledError
 
     @staticmethod
@@ -263,6 +251,11 @@ class DeliveryService:
         jitter_limit = min(self.retry_jitter_seconds, max(0, self.retry_max_seconds - delay))
         if jitter_limit:
             delay += float(self.jitter(0, jitter_limit))
+        elif delay == self.retry_max_seconds and self.retry_jitter_seconds:
+            # Retain jitter at the cap so long outages do not synchronize every
+            # due recipient. Keep the total bounded and no shorter than the base.
+            jitter_limit = min(self.retry_jitter_seconds, delay - self.retry_base_seconds)
+            delay += float(self.jitter(-jitter_limit, 0))
         if flood_wait is not None:
             delay = max(delay, flood_wait)
         return delay
@@ -290,6 +283,7 @@ class DeliveryService:
             profile.next_scheduled_at = None
 
     async def attempt(self, run: BackupRun) -> bool:
+        self._lease_owner = run.lease_owner
         await self._cancel_boundary(run)
         if (
             not run.pending_directory
@@ -474,7 +468,7 @@ class DeliveryService:
                 continue
 
             for artifact in artifacts[delivery.next_part - 1 :]:
-                await self._cancel_boundary(run)
+                await self._cancel_boundary(run, fence=True)
                 last_report = 0.0
 
                 def progress(_sent: int, _total: int) -> None:
@@ -518,16 +512,23 @@ class DeliveryService:
                     )
                     caption = TelegramHtml(f"{caption}\n{part_label}")
                 try:
-                    async with asyncio.timeout(self.upload_timeout):
-                        message = await self.transport.send_file(
-                            authorized.telegram_user_id,
-                            reusable_media.get(artifact.number) or str(artifact.path),
-                            force_document=True,
-                            progress_callback=progress,
-                            caption=caption,
-                            parse_mode="html",
-                        )
+                    with bound_contextvars(
+                        run_id=run.id,
+                        delivery_id=delivery.id,
+                        part=artifact.number,
+                        attempt=delivery.attempts,
+                    ):
+                        async with asyncio.timeout(self.upload_timeout):
+                            message = await self.transport.send_file(
+                                authorized.telegram_user_id,
+                                reusable_media.get(artifact.number) or str(artifact.path),
+                                force_document=True,
+                                progress_callback=progress,
+                                caption=caption,
+                                parse_mode="html",
+                            )
                 except Exception as exc:
+                    await self._cancel_boundary(run, fence=True)
                     kind, flood_wait = classify_delivery_error(exc)
                     delivery.last_error = f"{kind.value}:{type(exc).__name__}"
                     if (
@@ -554,7 +555,6 @@ class DeliveryService:
                         total_parts=len(artifacts),
                         error_kind=kind.value,
                         exception_class=type(exc).__name__,
-                        telegram_response_error=" ".join(str(exc).split())[:2000],
                         next_retry_time=(
                             delivery.next_attempt_at.isoformat()
                             if delivery.next_attempt_at is not None
@@ -564,6 +564,10 @@ class DeliveryService:
                     )
                     break
 
+                # Check ownership before recording an acknowledged upload, even if
+                # cancellation arrived while it was in flight. The next boundary
+                # observes cancellation after this durable checkpoint.
+                await self._cancel_boundary(run, fence=True, check_cancel=False)
                 delivery.next_part = artifact.number + 1
                 delivery.part_attempts = 0
                 delivery.telegram_message_id = getattr(message, "id", None)
@@ -595,7 +599,7 @@ class DeliveryService:
                     total_parts=len(artifacts),
                 )
 
-        await self._cancel_boundary(run)
+        await self._cancel_boundary(run, fence=True)
         pending = any(delivery.status is DeliveryStatus.PENDING for delivery in deliveries.values())
         failed = any(delivery.status is DeliveryStatus.FAILED for delivery in deliveries.values())
         if pending:

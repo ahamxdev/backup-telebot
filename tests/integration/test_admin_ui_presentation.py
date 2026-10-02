@@ -168,7 +168,7 @@ async def test_detail_cards_show_safe_configuration_with_icons(
         recipient = await AdminService(session).create_admin(actor, 2002, "Operations", set())
         server = RemoteServer(
             name="Git",
-            host="130.185.72.19",
+            host="192.0.2.19",
             ssh_port=22422,
             ssh_username="root",
             encrypted_private_key=secret_markers[0].encode(),
@@ -211,7 +211,7 @@ async def test_detail_cards_show_safe_configuration_with_icons(
     for expected in (
         "🖥 <b>Remote Server Details</b>",
         "📌 <b>Server Name:</b> <code>Git</code>",
-        "🌐 <b>Address:</b> <code>130.185.72.19:22422</code>",
+        "🌐 <b>Address:</b> <code>192.0.2.19:22422</code>",
         "👤 <b>User:</b> <code>root</code>",
         "🔐 <b>Authentication:</b> SSH private key",
         "🛡 <b>Fingerprint:</b> <code>SHA256:xxxx</code>",

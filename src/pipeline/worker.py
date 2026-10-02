@@ -139,12 +139,15 @@ class PipelineRunner:
                 return
             if await self._finalize_cancel_requested(run_id):
                 return
+            log.exception(
+                "backup_operation_failed", run_id=run_id, exception_class=type(exc).__name__
+            )
             raw_code = getattr(exc, "code", None)
             await self._fail(
                 run_id,
                 RunStatus.FAILED,
                 "PIPELINE_FAILED" if raw_code is None else str(raw_code),
-                str(exc),
+                "backup operation failed; consult server logs using the run ID",
             )
             await cleanup_orphaned_mssql_artifacts(self.sessions, self.settings)
         finally:
@@ -682,7 +685,8 @@ class PipelineRunner:
                     next_renewal = asyncio.get_running_loop().time() + renew_interval
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            log.error("run_lease_renewal_failed", run_id=run_id, exception_class=type(exc).__name__)
             lease_lost.set()
             parent.cancel()
 
@@ -753,6 +757,8 @@ class PipelineRunner:
                     "PENDING_ARTIFACT_MISSING",
                     "PENDING_CHECKSUM_MISMATCH",
                     "UPLOAD_LIMIT",
+                    "INVALID_MANIFEST",
+                    "INVALID_PENDING_PATH",
                 }:
                     run.status = RunStatus.FAILED
                     run.stage = RunStage.COMPLETE

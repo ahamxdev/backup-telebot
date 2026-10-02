@@ -23,7 +23,11 @@ def parse_superadmin_telegram_ids(value: str) -> tuple[int, ...]:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_ignore_empty=True, extra="ignore", case_sensitive=True
+        env_file=".env",
+        env_ignore_empty=True,
+        extra="ignore",
+        case_sensitive=True,
+        hide_input_in_errors=True,
     )
 
     APP_ENV: Literal["development", "test", "production"] = "development"
@@ -57,6 +61,7 @@ class Settings(BaseSettings):
     DATA_DIR: Path = Path(".runtime/data")
     ALLOWED_SOURCE_ROOTS: str = "/srv/backups"
     LOCAL_SOURCE_MOUNTS: str = ""
+    LOCAL_SOURCE_VALIDATION_SOCKET: Path = Path(".runtime/data/source-validation/worker.sock")
     DENIED_SOURCE_ROOTS: str = "/proc,/sys,/dev,/run"
     WORK_ROOT: Path = Path(".runtime/work")
     PENDING_DELIVERY_ROOT: Path = Path(".runtime/pending-delivery")
@@ -127,6 +132,13 @@ class Settings(BaseSettings):
             return self.TELEGRAM_MAX_UPLOAD_BYTES
         return self.TELEGRAM_MAX_FILE_BYTES
 
+    @field_validator("TELEGRAM_SESSION_PATH", "TELEGRAM_WORKER_SESSION_PATH")
+    @classmethod
+    def normalize_telegram_session_path(cls, value: Path) -> Path:
+        # Telethon appends this suffix itself. Secure and compare the actual file,
+        # including when operators configure an extensionless path.
+        return value if str(value).endswith(".session") else Path(str(value) + ".session")
+
     @field_validator("SUPERADMIN_TELEGRAM_IDS")
     @classmethod
     def valid_superadmin_telegram_ids(cls, value: str | None) -> str | None:
@@ -136,6 +148,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_related_settings(self) -> "Settings":
+        if self.TELEGRAM_SESSION_PATH.resolve() == self.TELEGRAM_WORKER_SESSION_PATH.resolve():
+            raise ValueError("bot and worker require distinct Telegram session paths")
         supported_database = self.DATABASE_URL.startswith(
             ("sqlite+aiosqlite:///", "postgresql+asyncpg://")
         )

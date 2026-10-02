@@ -11,9 +11,12 @@ from database.session import Database
 
 
 @pytest.fixture(autouse=True)
-def isolate_tests_from_local_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+def isolate_tests_from_local_dotenv(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Keep live credentials and runtime settings out of test configuration."""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
+    # Subprocess Alembic tests must not create or inspect production runtime state.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "subprocess-runtime"))
+    monkeypatch.setenv("APP_ENV", "test")
 
 
 @pytest.fixture
@@ -26,6 +29,7 @@ def settings(tmp_path: Path) -> Settings:
         PENDING_DELIVERY_ROOT=tmp_path / "pending-delivery",
         TELEGRAM_SESSION_PATH=tmp_path / "telegram" / "bot.session",
         TELEGRAM_WORKER_SESSION_PATH=tmp_path / "telegram" / "worker.session",
+        LOCAL_SOURCE_VALIDATION_SOCKET=tmp_path / "validation" / "worker.sock",
         SUPERADMIN_TELEGRAM_IDS="1001",
         TELEGRAM_API_ID=12345,
         TELEGRAM_API_HASH="test-api-hash",

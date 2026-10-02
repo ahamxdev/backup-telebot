@@ -1,6 +1,7 @@
 from presentation.telegram.i18n.message import section
 
 STRINGS: dict[str, str] = {
+    "local_validation_unavailable": "اعتبارسنجی مسیر محلی موقتاً در دسترس نیست. دوباره تلاش کنید.",
     "backups": "💾 بکاپ‌ها",
     "admins": "👥 ادمین‌ها",
     "remote_servers": "🖥 سرورهای ریموت",

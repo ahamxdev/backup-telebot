@@ -53,7 +53,10 @@ async def test_production_database_failure_prevents_runtime_startup_and_disposes
     database.session_factory = MagicMock()
     client_builder = MagicMock()
     monkeypatch.setattr(module, "Database", MagicMock(return_value=database))
-    monkeypatch.setattr(module, "build_client", client_builder)
+    if module is worker_app:
+        monkeypatch.setattr(module.TelegramUploadTransport, "for_worker", client_builder)
+    else:
+        monkeypatch.setattr(module, "build_client", client_builder)
 
     with pytest.raises(RuntimeError, match="PostgreSQL startup readiness check failed"):
         await runner(production_settings(settings))

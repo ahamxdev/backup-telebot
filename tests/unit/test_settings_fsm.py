@@ -37,7 +37,8 @@ def test_production_requires_credentials() -> None:
         Settings(APP_ENV="production")
 
 
-def test_env_example_is_a_valid_settings_template() -> None:
+def test_env_example_is_a_valid_settings_template(monkeypatch) -> None:
+    monkeypatch.delenv("APP_ENV", raising=False)
     template = Path(__file__).parents[2] / ".env.example"
 
     settings = Settings(_env_file=template)
@@ -146,3 +147,23 @@ async def test_rate_limit_periodic_prune_removes_expired_user_buckets() -> None:
     with patch("presentation.telegram.runtime.rate_limit.monotonic", return_value=71):
         assert await limiter.prune_expired() == 1
         assert await limiter.allow(42)
+
+
+@pytest.mark.parametrize("worker_name", ["shared", "shared.session"])
+def test_bot_worker_session_aliases_are_rejected(tmp_path: Path, worker_name: str) -> None:
+    with pytest.raises(ValidationError, match="distinct Telegram session paths"):
+        Settings(
+            APP_ENV="test",
+            TELEGRAM_SESSION_PATH=tmp_path / "shared.session",
+            TELEGRAM_WORKER_SESSION_PATH=tmp_path / worker_name,
+        )
+
+
+def test_extensionless_session_paths_secure_the_telethon_filename(tmp_path: Path) -> None:
+    settings = Settings(
+        APP_ENV="test",
+        TELEGRAM_SESSION_PATH=tmp_path / "bot",
+        TELEGRAM_WORKER_SESSION_PATH=tmp_path / "worker",
+    )
+    assert tmp_path / "bot.session" == settings.TELEGRAM_SESSION_PATH
+    assert tmp_path / "worker.session" == settings.TELEGRAM_WORKER_SESSION_PATH

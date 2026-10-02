@@ -133,6 +133,9 @@ def finalize_artifact(
     artifact = directory / filename
     try:
         os.replace(source, artifact)
+        # Persist final bytes before publishing the fsynced recovery manifest.
+        with artifact.open("rb") as stream:
+            os.fsync(stream.fileno())
         checksum, size = sha256_file(artifact, progress_check), artifact.stat().st_size
         parts = (
             _split_artifact(artifact, max_file_bytes, progress_check)
